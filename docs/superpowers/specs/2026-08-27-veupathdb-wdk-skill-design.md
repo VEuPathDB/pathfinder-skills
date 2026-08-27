@@ -18,7 +18,14 @@ knowledge, parameter/vocabulary rules, response shaping, and runnable scripts.
 ## Scope (v1): the core strategy loop
 
 1. Authenticate (bearer token) and verify identity.
-2. Discover searches (record types, search catalog, keyword scoring).
+2. Discover searches — **reasoning over the full compact catalog, delegated to a
+   sub-agent**: the orchestrator (main thread) dispatches a sub-agent that runs
+   `catalog SITE`, reads all search descriptions in isolated context, and
+   returns a shortlist (3–8 candidates with rationale, tagged seed / filter /
+   transform). No embeddings. Measured dump sizes: PlasmoDB ~32k tokens (515
+   searches), VectorBase ~74k (923), ToxoDB ~23k (423). Clients without
+   sub-agents read the dump directly; `find-searches` (lexical) remains as a
+   cheap convenience when the target is already roughly known.
 3. Inspect a search: shaped parameter sheet, vocabulary browsing, dependent params.
 4. Count / preview results anonymously (no user session) before committing.
 5. Create steps and strategies (leaf / combine / transform), get counts and the web URL.
@@ -75,7 +82,8 @@ pathfinder-skills/
 | `whoami SITE` | `GET /users/current` | verifies token; **refuses guest identities**; prints numeric user id |
 | `record-types SITE` | `GET /record-types?format=expanded` | compact listing |
 | `searches SITE RECORD_TYPE` | `GET /record-types/{rt}/searches` | name, displayName, one-line description |
-| `find-searches SITE QUERY` | `GET /record-types?format=expanded` + per-type searches | lexical word/substring scoring over names+descriptions across record types; relevance-sorted, truncated; catalog cached on disk (`~/.cache/veupathdb-wdk/{site}.json`, 7-day TTL) since a cold fetch is slow |
+| `catalog SITE [--record-type RT]` | `GET /record-types?format=expanded` + per-type searches | **primary discovery primitive**: compact one-line-per-search dump (record type, name, displayName, description trimmed to ~250 chars). ~25–75k tokens per site — sized for a sub-agent's isolated context. Catalog cached on disk (`~/.cache/veupathdb-wdk/{site}.json`, 7-day TTL) since a cold fetch is slow |
+| `find-searches SITE QUERY` | catalog (cached, as above) | convenience lexical word/substring scoring over names+descriptions; relevance-sorted, truncated. Secondary to `catalog` + reasoning |
 | `inspect SITE SEARCH` | `GET/POST /record-types/{rt}/searches/{name}?expandParams=true` | shaped parameter sheet (see Shaping) |
 | `param-options SITE SEARCH PARAM [--query Q] [--context k=v…]` | search detail / `refreshed-dependent-params` | vocabulary browsing; dependent vocabularies require `--context` for parents |
 | `count SITE SEARCH --params JSON` | `POST /record-types/{rt}/searches/{name}/reports/standard` | anonymous; no step/strategy/user session |
@@ -161,6 +169,10 @@ and `docs/knowledge/wdk/rules/parameters-and-vocabularies.md`:
   VectorBase, WDK, search strategy, gene search…).
 - Body ≤ 200 lines: the 6-step workflow, the subcommand index (one line each),
   the 3 highest-value gotchas inline, and pointers into `references/` for depth.
+- Explicit sub-agent guidance for discovery: dispatch a sub-agent to run
+  `catalog SITE` and shortlist candidate searches in isolated context, keeping
+  the orchestrator thread clean; fall back to reading the dump directly on
+  hosts without sub-agents.
 - `wdk.py --help` / `wdk.py <sub> --help` are the second discovery layer.
 - References are the third layer, read only when the agent needs them.
 
