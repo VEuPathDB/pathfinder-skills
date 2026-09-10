@@ -53,11 +53,26 @@ def cmd_record_types(args) -> None:
     emit(client(args.site).get("/record-types"))
 
 
+def _parse_excluded_prefixes(arg):
+    if arg is None:
+        return None
+    out = []
+    for item in arg:
+        for p in item.split(","):
+            p = p.strip()
+            if p:
+                out.append(p)
+    if not out and any(item == "" or item.strip() == "" for item in arg):
+        return ()
+    return tuple(out) if out else ()
+
+
 def cmd_searches(args) -> None:
     from _client import fetch_catalog
     from _shaping import catalog_lines
 
-    cat = fetch_catalog(client(args.site), refresh=args.refresh)
+    prefixes = _parse_excluded_prefixes(getattr(args, "exclude_param_prefix", None))
+    cat = fetch_catalog(client(args.site), refresh=args.refresh, excluded_param_prefixes=prefixes)
     print("\n".join(catalog_lines(cat, record_type=args.record_type)))
 
 
@@ -65,7 +80,8 @@ def cmd_catalog(args) -> None:
     from _client import fetch_catalog
     from _shaping import catalog_lines
 
-    cat = fetch_catalog(client(args.site), refresh=args.refresh)
+    prefixes = _parse_excluded_prefixes(getattr(args, "exclude_param_prefix", None))
+    cat = fetch_catalog(client(args.site), refresh=args.refresh, excluded_param_prefixes=prefixes)
     lines = catalog_lines(cat, record_type=args.record_type)
     print(f"# {args.site}: {len(lines)} searches (record_type\tname\tdisplayName\tdescription)")
     print("\n".join(lines))
@@ -75,7 +91,9 @@ def cmd_find_searches(args) -> None:
     from _client import fetch_catalog
     from _shaping import score_searches
 
-    hits = score_searches(fetch_catalog(client(args.site)), args.query, limit=args.limit)
+    prefixes = _parse_excluded_prefixes(getattr(args, "exclude_param_prefix", None))
+    cat = fetch_catalog(client(args.site), excluded_param_prefixes=prefixes)
+    hits = score_searches(cat, args.query, limit=args.limit)
     if not hits:
         fail(
             f"no searches match '{args.query}'. Broaden the query, or run "
@@ -85,11 +103,20 @@ def cmd_find_searches(args) -> None:
     emit(hits)
 
 
-def _resolve_or_fail(cat, name, site):
+def _resolve_or_fail(cat, name, site, client_inst=None):
     from _shaping import resolve_search
 
     rt, suggestions = resolve_search(cat, name)
     if rt is None:
+        if client_inst is not None:
+            from _client import fetch_catalog
+            raw_cat = fetch_catalog(client_inst, excluded_param_prefixes=())
+            raw_rt, _ = resolve_search(raw_cat, name)
+            if raw_rt is not None:
+                fail(
+                    f"search '{name}' on {site} is unavailable: it uses excluded "
+                    "parameter prefix(es) (e.g. 'eda_') which are not supported via WDK directly."
+                )
         fail(
             f"unknown search '{name}' on {site}. Did you mean: "
             f"{', '.join(suggestions) or '(no close match)'}? "
@@ -104,7 +131,7 @@ def cmd_inspect(args) -> None:
 
     c = client(args.site)
     cat = fetch_catalog(c)
-    rt = _resolve_or_fail(cat, args.search, args.site)
+    rt = _resolve_or_fail(cat, args.search, args.site, client_inst=c)
     emit(build_sheet(get_search_detail(c, rt, args.search), query=args.query))
 
 
@@ -134,7 +161,7 @@ def cmd_param_options(args) -> None:
 
     c = client(args.site)
     cat = fetch_catalog(c)
-    rt = _resolve_or_fail(cat, args.search, args.site)
+    rt = _resolve_or_fail(cat, args.search, args.site, client_inst=c)
     detail = get_search_detail(c, rt, args.search)
     parents = [
         p["name"]
@@ -182,14 +209,15 @@ def _load_params(raw):
 
 def _prepared(args):
     from _client import fetch_catalog
-    from _shaping import ParamError, encode_params, get_search_detail
+    from _shaping import ParamError, encode_params, get_search_detail_for_params
 
     c = client(args.site)
     cat = fetch_catalog(c)
-    rt = _resolve_or_fail(cat, args.search, args.site)
-    detail = get_search_detail(c, rt, args.search)
+    rt = _resolve_or_fail(cat, args.search, args.site, client_inst=c)
+    params = _load_params(args.params)
+    detail = get_search_detail_for_params(c, rt, args.search, params)
     try:
-        wire = encode_params(detail, _load_params(args.params))
+        wire = encode_params(detail, params)
     except ParamError as e:
         fail(str(e))
     return c, rt, wire
@@ -401,6 +429,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("site")
     sp.add_argument("record_type")
     sp.add_argument("--refresh", action="store_true", help="bypass 7-day disk cache")
+    sp.add_argument(
+        "--exclude-param-prefix",
+        action="append",
+        help="exclude searches with params starting with prefix (default: eda_; pass '' to disable)",
+    )
     sp.set_defaults(func=cmd_searches)
 
     sp = sub.add_parser(
@@ -410,12 +443,22 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("site")
     sp.add_argument("--record-type")
     sp.add_argument("--refresh", action="store_true")
+    sp.add_argument(
+        "--exclude-param-prefix",
+        action="append",
+        help="exclude searches with params starting with prefix (default: eda_; pass '' to disable)",
+    )
     sp.set_defaults(func=cmd_catalog)
 
     sp = sub.add_parser("find-searches", help="lexical search-name lookup (convenience)")
     sp.add_argument("site")
     sp.add_argument("query")
     sp.add_argument("--limit", type=int, default=20)
+    sp.add_argument(
+        "--exclude-param-prefix",
+        action="append",
+        help="exclude searches with params starting with prefix (default: eda_; pass '' to disable)",
+    )
     sp.set_defaults(func=cmd_find_searches)
 
     sp = sub.add_parser(

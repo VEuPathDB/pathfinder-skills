@@ -142,6 +142,33 @@ def get_search_detail(client, rt, name, context=None):
     return data["searchData"]
 
 
+def get_search_detail_for_params(client, rt, name, user_params=None):
+    """Fetch search detail, automatically applying contextParamValues if user_params
+    contains parent parameters that control dependent child vocabularies.
+    """
+    detail = get_search_detail(client, rt, name)
+    if not user_params:
+        return detail
+
+    parents = {
+        p["name"]
+        for p in detail.get("parameters", [])
+        if p.get("dependentParams")
+    }
+    context = {
+        p_name: (
+            user_params[p_name][0]
+            if isinstance(user_params[p_name], (list, tuple)) and user_params[p_name]
+            else str(user_params[p_name])
+        )
+        for p_name in parents
+        if p_name in user_params
+    }
+    if context:
+        detail = get_search_detail(client, rt, name, context=context)
+    return detail
+
+
 def _render_tree(tree):
     lines, more = [], []
 

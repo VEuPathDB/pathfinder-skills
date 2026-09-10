@@ -112,3 +112,31 @@ def test_live_vectorbase_strategy_lifecycle(token):
         uid = c.user_id()
         c.delete(f"/users/{uid}/strategies/{sid}")
 
+
+def test_live_strategy_with_dependent_params(token):
+    from _client import Client, fetch_catalog
+    from _strategy import build_strategy
+
+    c = Client("vectorbase", token=token)
+    cat = fetch_catalog(c)
+    spec = {
+        "leaf": {
+            "search": "GenesByMicroarrayagamPEST_microarrayExpression_GSE8822_bloodmeal_response_RSRC",
+            "params": {
+                "profileset_generic": "bloodmeal_time_series",
+                "samples_fc_ref_generic": ["non-blood-fed"],
+                "samples_fc_comp_generic": ["blood-fed 3h"],
+            },
+        }
+    }
+    out = build_strategy(c, cat, spec, "__skill_test__: dependent params")
+    sid = out["strategy_id"]
+    try:
+        assert out["url"].endswith(f"/app/workspace/strategies/{sid}")
+        assert len(out["steps"]) == 1
+        assert 1400 <= out["estimated_size"] <= 2200  # 1753
+    finally:
+        uid = c.user_id()
+        c.delete(f"/users/{uid}/strategies/{sid}")
+
+

@@ -35,3 +35,30 @@ def test_live_count_vectorbase(token):
     resp = run_report(c, "transcript", "GenesByMolecularWeight", wire)
     count, _ = extract_count(resp["meta"])
     assert 5400 <= count <= 8100  # gold 6755 on 2026-08-27; ±20%
+
+
+def test_live_count_dependent_params(token):
+    from _client import Client
+    from _shaping import (
+        encode_params,
+        extract_count,
+        get_search_detail_for_params,
+        run_report,
+    )
+
+    c = Client("vectorbase", token=token)
+    search_name = (
+        "GenesByMicroarrayagamPEST_microarrayExpression_GSE8822_bloodmeal_response_RSRC"
+    )
+    user_params = {
+        "profileset_generic": "bloodmeal_time_series",
+        "samples_fc_ref_generic": ["non-blood-fed"],
+        "samples_fc_comp_generic": ["blood-fed 3h"],
+    }
+    detail = get_search_detail_for_params(c, "transcript", search_name, user_params)
+    wire = encode_params(detail, user_params)
+    resp = run_report(c, "transcript", search_name, wire, num_records=1)
+    count, field = extract_count(resp["meta"])
+    assert field == "displayViewTotalCount"
+    assert 1400 <= count <= 2200  # 1753 on 2026-09-10
+

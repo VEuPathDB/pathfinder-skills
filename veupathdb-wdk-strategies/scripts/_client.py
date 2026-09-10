@@ -129,8 +129,46 @@ class Client:
         return self._user_id
 
 
-def fetch_catalog(client, refresh=False):
-    """Record types + compact search listings. Disk-cached 7 days per site."""
+DEFAULT_EXCLUDED_PARAM_PREFIXES = ("eda_",)
+
+
+def get_excluded_param_prefixes() -> tuple[str, ...]:
+    env_val = os.environ.get("WDK_EXCLUDED_PARAM_PREFIXES")
+    if env_val is not None:
+        if not env_val.strip():
+            return ()
+        return tuple(p.strip() for p in env_val.split(",") if p.strip())
+    return DEFAULT_EXCLUDED_PARAM_PREFIXES
+
+
+def filter_catalog_searches(catalog: dict, excluded_prefixes: tuple[str, ...] | None = None) -> dict:
+    """Return catalog with searches filtered out if any param matches an excluded prefix."""
+    if excluded_prefixes is None:
+        excluded_prefixes = get_excluded_param_prefixes()
+    if not excluded_prefixes:
+        return catalog
+
+    filtered_searches = {}
+    for rt, searches in catalog.get("searches", {}).items():
+        filtered_searches[rt] = [
+            s
+            for s in searches
+            if not any(
+                isinstance(p, str)
+                and any(p.startswith(prefix) for prefix in excluded_prefixes)
+                for p in s.get("paramNames", [])
+            )
+        ]
+    return {
+        **catalog,
+        "searches": filtered_searches,
+    }
+
+
+def fetch_catalog(client, refresh=False, excluded_param_prefixes=None):
+    """Record types + compact search listings. Disk-cached 7 days per site.
+    Filters out searches with excluded_param_prefixes (default: ('eda_',)).
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache = CACHE_DIR / f"{client.site_id}.json"
     if (
@@ -138,31 +176,33 @@ def fetch_catalog(client, refresh=False):
         and cache.is_file()
         and time.time() - cache.stat().st_mtime < CACHE_TTL_S
     ):
-        return json.loads(cache.read_text())
-    record_types = client.get("/record-types")
-    searches = {}
-    for rt in record_types:
-        try:
-            listing = client.get(f"/record-types/{rt}/searches")
-        except WDKError:
-            continue  # some record types have no search listing; skip, don't fail
-        searches[rt] = [
-            {
-                "name": s["urlSegment"],
-                "displayName": s.get("displayName", ""),
-                "description": s.get("description") or s.get("summary") or "",
-                "paramNames": s.get("paramNames", []),
-                "outputRecordClassName": s.get("outputRecordClassName", ""),
-            }
-            for s in listing
-        ]
-    catalog = {
-        "cached_at": time.time(),
-        "record_types": record_types,
-        "searches": searches,
-    }
-    cache.write_text(json.dumps(catalog))
-    return catalog
+        raw_catalog = json.loads(cache.read_text())
+    else:
+        record_types = client.get("/record-types")
+        searches = {}
+        for rt in record_types:
+            try:
+                listing = client.get(f"/record-types/{rt}/searches")
+            except WDKError:
+                continue  # some record types have no search listing; skip, don't fail
+            searches[rt] = [
+                {
+                    "name": s["urlSegment"],
+                    "displayName": s.get("displayName", ""),
+                    "description": s.get("description") or s.get("summary") or "",
+                    "paramNames": s.get("paramNames", []),
+                    "outputRecordClassName": s.get("outputRecordClassName", ""),
+                }
+                for s in listing
+            ]
+        raw_catalog = {
+            "cached_at": time.time(),
+            "record_types": record_types,
+            "searches": searches,
+        }
+        cache.write_text(json.dumps(raw_catalog))
+
+    return filter_catalog_searches(raw_catalog, excluded_prefixes=excluded_param_prefixes)
 
 
 def fetch_record_type(client, record_type, refresh=False):

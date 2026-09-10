@@ -164,3 +164,64 @@ def test_shape_record_offline():
     assert len(shaped["tables"]["Orthologs"]) == 1
     assert shaped["tables"]["Orthologs"][0]["organism"] == "Anopheles albimanus STECLA"
     assert shaped["attributes"]["name"] == "LRIM1"
+
+
+def test_get_search_detail_for_params_offline():
+    from _shaping import get_search_detail_for_params
+
+    class MockClient:
+        def __init__(self):
+            self.post_called_with = None
+
+        def get(self, path, params=None):
+            return {
+                "searchData": {
+                    "name": "ExpSearch",
+                    "parameters": [
+                        {
+                            "name": "experiment",
+                            "dependentParams": ["samples"],
+                            "vocabulary": [["exp1", "exp1"], ["exp2", "exp2"]],
+                        },
+                        {
+                            "name": "samples",
+                            "vocabulary": [["s1", "s1"]],
+                        },
+                    ],
+                }
+            }
+
+        def post(self, path, body, idempotent=True):
+            self.post_called_with = body
+            return {
+                "searchData": {
+                    "name": "ExpSearch",
+                    "parameters": [
+                        {
+                            "name": "experiment",
+                            "dependentParams": ["samples"],
+                            "vocabulary": [["exp1", "exp1"], ["exp2", "exp2"]],
+                        },
+                        {
+                            "name": "samples",
+                            "vocabulary": [["s2", "s2"], ["s3", "s3"]],
+                        },
+                    ],
+                }
+            }
+
+    c = MockClient()
+    # Case 1: no parent param supplied in user_params
+    d1 = get_search_detail_for_params(c, "transcript", "ExpSearch", {"other": "val"})
+    assert c.post_called_with is None
+    samples_p = next(p for p in d1["parameters"] if p["name"] == "samples")
+    assert samples_p["vocabulary"] == [["s1", "s1"]]
+
+    # Case 2: parent param supplied
+    d2 = get_search_detail_for_params(
+        c, "transcript", "ExpSearch", {"experiment": "exp2", "samples": ["s2"]}
+    )
+    assert c.post_called_with == {"contextParamValues": {"experiment": "exp2"}}
+    samples_p2 = next(p for p in d2["parameters"] if p["name"] == "samples")
+    assert samples_p2["vocabulary"] == [["s2", "s2"], ["s3", "s3"]]
+

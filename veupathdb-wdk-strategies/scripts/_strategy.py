@@ -6,7 +6,12 @@ Spec nodes (exactly one key each):
   {"transform": {"search": name, "params": {...}, "input": node}}
 OP: UNION | INTERSECT | MINUS | RMINUS | LONLY | RONLY
 """
-from _shaping import all_search_names, encode_params, get_search_detail
+from _shaping import (
+    all_search_names,
+    encode_params,
+    get_search_detail,
+    get_search_detail_for_params,
+)
 from _sites import strategy_url
 
 OPERATORS = {"UNION", "INTERSECT", "MINUS", "RMINUS", "LONLY", "RONLY"}
@@ -74,8 +79,9 @@ def build_strategy(client, catalog, spec, name):
     def create(node):
         kind, body = _kind(node)
         if kind == "leaf":
-            detail = get_search_detail(client, rt, body["search"])
-            wire = encode_params(detail, body.get("params", {}))
+            params = body.get("params", {})
+            detail = get_search_detail_for_params(client, rt, body["search"], params)
+            wire = encode_params(detail, params)
             step = client.post(
                 f"/users/{uid}/steps",
                 {"searchName": body["search"], "searchConfig": {"parameters": wire}},
@@ -84,8 +90,9 @@ def build_strategy(client, catalog, spec, name):
             return {"stepId": step["id"]}
         if kind == "transform":
             child = create(body["input"])
-            detail = get_search_detail(client, rt, body["search"])
-            wire = encode_params(detail, body.get("params", {}))  # input-step -> ""
+            params = body.get("params", {})
+            detail = get_search_detail_for_params(client, rt, body["search"], params)
+            wire = encode_params(detail, params)  # input-step -> ""
             step = client.post(
                 f"/users/{uid}/steps",
                 {"searchName": body["search"], "searchConfig": {"parameters": wire}},

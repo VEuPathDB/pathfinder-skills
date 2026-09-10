@@ -103,6 +103,8 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 - **Resolve symbols via `GenesByText`, not WebSearch or external APIs (NCBI, Ensembl).**
   VEuPathDB is the primary authority for these genome annotations; external
   databases often use different coordinate systems or outdated gene builds.
+- **Differential expression (EDA) searches are excluded**: Searches with `eda_` params
+  require interactive web-app analysis and are hidden from `catalog`/`find-searches`.
 
 ## Deeper reference (read on demand)
 
