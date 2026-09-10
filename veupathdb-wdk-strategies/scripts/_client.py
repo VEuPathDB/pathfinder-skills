@@ -125,3 +125,39 @@ class Client:
                 )
             self._user_id = int(me["id"])
         return self._user_id
+
+
+def fetch_catalog(client, refresh=False):
+    """Record types + compact search listings. Disk-cached 7 days per site."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache = CACHE_DIR / f"{client.site_id}.json"
+    if (
+        not refresh
+        and cache.is_file()
+        and time.time() - cache.stat().st_mtime < CACHE_TTL_S
+    ):
+        return json.loads(cache.read_text())
+    record_types = client.get("/record-types")
+    searches = {}
+    for rt in record_types:
+        try:
+            listing = client.get(f"/record-types/{rt}/searches")
+        except WDKError:
+            continue  # some record types have no search listing; skip, don't fail
+        searches[rt] = [
+            {
+                "name": s["urlSegment"],
+                "displayName": s.get("displayName", ""),
+                "description": s.get("description") or s.get("summary") or "",
+                "paramNames": s.get("paramNames", []),
+                "outputRecordClassName": s.get("outputRecordClassName", ""),
+            }
+            for s in listing
+        ]
+    catalog = {
+        "cached_at": time.time(),
+        "record_types": record_types,
+        "searches": searches,
+    }
+    cache.write_text(json.dumps(catalog))
+    return catalog

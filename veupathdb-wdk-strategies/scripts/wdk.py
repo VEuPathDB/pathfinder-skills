@@ -49,6 +49,28 @@ def cmd_whoami(args) -> None:
     emit({"site": args.site, "user_id": me["id"], "email": me.get("email")})
 
 
+def cmd_record_types(args) -> None:
+    emit(client(args.site).get("/record-types"))
+
+
+def cmd_searches(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import catalog_lines
+
+    cat = fetch_catalog(client(args.site), refresh=args.refresh)
+    print("\n".join(catalog_lines(cat, record_type=args.record_type)))
+
+
+def cmd_catalog(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import catalog_lines
+
+    cat = fetch_catalog(client(args.site), refresh=args.refresh)
+    lines = catalog_lines(cat, record_type=args.record_type)
+    print(f"# {args.site}: {len(lines)} searches (record_type\tname\tdisplayName\tdescription)")
+    print("\n".join(lines))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -59,6 +81,25 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("whoami", help="verify token; print numeric user id")
     sp.add_argument("site")
     sp.set_defaults(func=cmd_whoami)
+
+    sp = sub.add_parser("record-types", help="list record type url segments")
+    sp.add_argument("site")
+    sp.set_defaults(func=cmd_record_types)
+
+    sp = sub.add_parser("searches", help="list searches for one record type")
+    sp.add_argument("site")
+    sp.add_argument("record_type")
+    sp.add_argument("--refresh", action="store_true", help="bypass 7-day disk cache")
+    sp.set_defaults(func=cmd_searches)
+
+    sp = sub.add_parser(
+        "catalog",
+        help="full compact search catalog (primary discovery input; ~25-75k tokens)",
+    )
+    sp.add_argument("site")
+    sp.add_argument("--record-type")
+    sp.add_argument("--refresh", action="store_true")
+    sp.set_defaults(func=cmd_catalog)
 
     return p
 
