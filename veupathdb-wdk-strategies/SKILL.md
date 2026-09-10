@@ -19,6 +19,23 @@ REGISTERED user's token — WDK silently mints guests otherwise. Verify first:
 
 Details and how to obtain a token: references/auth.md
 
+## Resolving gene symbols & names (don't web-search first!)
+
+When asked about a gene by symbol, name, or product (e.g. `PGRPLB`, `K13`):
+- **Do NOT reach for WebSearch** to look up accession IDs (`AGAP...`, `PF3D7_...`).
+  Web searches often yield wrong-species orthologs or outdated gene models.
+- **Resolve with `GenesByText` preview first**:
+  ```bash
+  uv run scripts/wdk.py preview SITE GenesByText \
+    --params '{"text_expression": "SYMBOL", "text_search_organism": ["Organism"]}' \
+    --attributes primary_key,gene_name,gene_product
+  ```
+  Tip: to match symbols specifically, add `"text_fields": ["name", "Alias"]` to `--params`.
+- **When is WebSearch acceptable?** ONLY as a fallback if VEuPathDB text search
+  returns 0 hits, specifically to discover published nomenclature/hyphenation
+  variants (e.g. `PGRP-LB` vs `PGRPLB`) or synonym aliases. Once a synonym is
+  found, return to `GenesByText` or `fetch-record` inside VEuPathDB.
+
 ## The workflow
 
 1. **Pick the site**: `sites` lists all 14 (plasmodb, vectorbase, toxodb, …).
@@ -81,6 +98,9 @@ Details and how to obtain a token: references/auth.md
   covered value, never one representative.
 - **Defaults are disclosed**: params you leave null use the search default
   (shown in the sheet) — tell the user which defaults applied.
+- **Resolve symbols via `GenesByText`, not WebSearch.** WDK indexes gene
+  symbols, aliases, and products. Web searches frequently confuse mosquito,
+  fly, and human ortholog IDs or surface outdated gene models.
 
 ## Deeper reference (read on demand)
 
