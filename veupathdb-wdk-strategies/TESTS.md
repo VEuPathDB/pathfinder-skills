@@ -12,3 +12,4 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | CAT-2 | `wdk.py catalog plasmodb` | header + one TSV line per non-boolean search | range ±20% | 495 lines | 2026-08-27 |
 | CAT-3 | `wdk.py catalog vectorbase` | as CAT-2 | range ±20% | 995 lines | 2026-08-27 |
 | CAT-4 | `wdk.py catalog toxodb` | as CAT-2 | range ±20% | 385 lines | 2026-08-27 |
+| FIND-1 | `wdk.py find-searches plasmodb "GO term"` | GenesByGoTerm in top 5 | fields-present | rank=1 | 2026-08-27 |

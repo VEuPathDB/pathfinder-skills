@@ -37,3 +37,36 @@ def all_search_names(catalog):
             if s["name"] not in names or names[s["name"]] == "gene":
                 names[s["name"]] = rt
     return names
+
+
+def score_searches(catalog, query, limit=20):
+    words = [w for w in re.split(r"\W+", query.lower()) if len(w) >= 2]
+    scored = []
+    for rt, searches in catalog["searches"].items():
+        for s in searches:
+            if _is_boolean(s["name"]):
+                continue
+            name = s["name"].lower()
+            disp = s["displayName"].lower()
+            desc = strip_html(s["description"]).lower()
+            score = sum(
+                (3 if w in name else 0)
+                + (2 if w in disp else 0)
+                + (1 if w in desc else 0)
+                for w in words
+            )
+            if score:
+                scored.append((score, rt, s))
+    if not scored:
+        return []
+    scored.sort(key=lambda t: (-t[0], t[2]["name"]))
+    top = scored[0][0]
+    return [
+        {
+            "record_type": rt,
+            "name": s["name"],
+            "displayName": s["displayName"],
+            "relevance": round(score / top, 2),
+        }
+        for score, rt, s in scored[:limit]
+    ]

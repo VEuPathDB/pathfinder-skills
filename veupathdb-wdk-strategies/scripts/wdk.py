@@ -71,6 +71,20 @@ def cmd_catalog(args) -> None:
     print("\n".join(lines))
 
 
+def cmd_find_searches(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import score_searches
+
+    hits = score_searches(fetch_catalog(client(args.site)), args.query, limit=args.limit)
+    if not hits:
+        fail(
+            f"no searches match '{args.query}'. Broaden the query, or run "
+            f"'wdk.py catalog {args.site}' and reason over the full listing "
+            "(recommended: in a sub-agent)"
+        )
+    emit(hits)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -100,6 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--record-type")
     sp.add_argument("--refresh", action="store_true")
     sp.set_defaults(func=cmd_catalog)
+
+    sp = sub.add_parser("find-searches", help="lexical search-name lookup (convenience)")
+    sp.add_argument("site")
+    sp.add_argument("query")
+    sp.add_argument("--limit", type=int, default=20)
+    sp.set_defaults(func=cmd_find_searches)
 
     return p
 
