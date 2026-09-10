@@ -85,6 +85,29 @@ def cmd_find_searches(args) -> None:
     emit(hits)
 
 
+def _resolve_or_fail(cat, name, site):
+    from _shaping import resolve_search
+
+    rt, suggestions = resolve_search(cat, name)
+    if rt is None:
+        fail(
+            f"unknown search '{name}' on {site}. Did you mean: "
+            f"{', '.join(suggestions) or '(no close match)'}? "
+            f"Run 'wdk.py catalog {site}' for the full list."
+        )
+    return rt
+
+
+def cmd_inspect(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import build_sheet, get_search_detail
+
+    c = client(args.site)
+    cat = fetch_catalog(c)
+    rt = _resolve_or_fail(cat, args.search, args.site)
+    emit(build_sheet(get_search_detail(c, rt, args.search), query=args.query))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -120,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("query")
     sp.add_argument("--limit", type=int, default=20)
     sp.set_defaults(func=cmd_find_searches)
+
+    sp = sub.add_parser("inspect", help="shaped parameter sheet for one search")
+    sp.add_argument("site")
+    sp.add_argument("search")
+    sp.add_argument("--query", help="hint used to shortlist huge vocabularies")
+    sp.set_defaults(func=cmd_inspect)
 
     return p
 
