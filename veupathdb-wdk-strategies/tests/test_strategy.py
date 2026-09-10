@@ -65,3 +65,50 @@ def test_live_two_leaf_intersect(live_client, strategy_tracker):
     assert isinstance(root, int)
     assert root <= min(leaf_counts)  # intersect can't exceed either input
     assert root > 0  # 40k-50k overlap is non-empty
+
+
+def test_live_vectorbase_strategy_lifecycle(token):
+    from _client import Client, fetch_catalog
+    from _strategy import build_strategy
+
+    c = Client("vectorbase", token=token)
+    cat = fetch_catalog(c)
+    spec = {
+        "combine": {
+            "operator": "INTERSECT",
+            "left": {
+                "leaf": {
+                    "search": "GenesByMolecularWeight",
+                    "params": {
+                        "organism": ["Anopheles gambiae PEST"],
+                        "min_molecular_weight": "10000",
+                        "max_molecular_weight": "50000",
+                    },
+                }
+            },
+            "right": {
+                "leaf": {
+                    "search": "GenesByMolecularWeight",
+                    "params": {
+                        "organism": ["Anopheles gambiae PEST"],
+                        "min_molecular_weight": "40000",
+                        "max_molecular_weight": "100000",
+                    },
+                }
+            },
+        }
+    }
+    out = build_strategy(c, cat, spec, "__skill_test__: vectorbase e2e")
+    sid = out["strategy_id"]
+    try:
+        assert out["url"].endswith(f"/app/workspace/strategies/{sid}")
+        assert len(out["steps"]) == 3
+        root = out["estimated_size"]
+        leaves = [s["count"] for s in out["steps"] if s["search"] == "GenesByMolecularWeight"]
+        assert len(leaves) == 2
+        assert root <= min(leaves)
+        assert root > 0
+    finally:
+        uid = c.user_id()
+        c.delete(f"/users/{uid}/strategies/{sid}")
+
