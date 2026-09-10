@@ -108,6 +108,58 @@ def cmd_inspect(args) -> None:
     emit(build_sheet(get_search_detail(c, rt, args.search), query=args.query))
 
 
+def _parse_kv(pairs):
+    out = {}
+    for pair in pairs or []:
+        if "=" not in pair:
+            fail(f"--context expects key=value, got '{pair}'")
+        k, val = pair.split("=", 1)
+        out[k] = val
+    return out
+
+
+def cmd_param_options(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import get_search_detail, param_options
+
+    c = client(args.site)
+    cat = fetch_catalog(c)
+    rt = _resolve_or_fail(cat, args.search, args.site)
+    detail = get_search_detail(c, rt, args.search)
+    parents = [
+        p["name"]
+        for p in detail["parameters"]
+        if args.param in p.get("dependentParams", [])
+    ]
+    note = None
+    if parents:
+        given = _parse_kv(args.context)
+        context = {
+            name: given.get(
+                name,
+                next(
+                    q.get("initialDisplayValue")
+                    for q in detail["parameters"]
+                    if q["name"] == name
+                ),
+            )
+            for name in parents
+        }
+        detail = get_search_detail(c, rt, args.search, context=context)
+        used = ", ".join(f"{k}={v}" for k, v in context.items())
+        defaulted = [k for k in parents if k not in given]
+        note = f"vocabulary read under {used}"
+        if defaulted:
+            note += (
+                f" ({'/'.join(defaulted)} defaulted — pass --context "
+                f"{defaulted[0]}=... to change)"
+            )
+    out = param_options(detail, args.param, query=args.query, limit=args.limit)
+    if note and "error" not in out:
+        out["context_note"] = note
+    emit(out)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -149,6 +201,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("search")
     sp.add_argument("--query", help="hint used to shortlist huge vocabularies")
     sp.set_defaults(func=cmd_inspect)
+
+    sp = sub.add_parser("param-options", help="browse/filter a parameter's vocabulary")
+    sp.add_argument("site")
+    sp.add_argument("search")
+    sp.add_argument("param")
+    sp.add_argument("--query", help="case-insensitive substring filter")
+    sp.add_argument("--context", nargs="*", metavar="PARENT=VALUE",
+                    help="values for params this vocabulary depends on")
+    sp.add_argument("--limit", type=int, default=200)
+    sp.set_defaults(func=cmd_param_options)
 
     return p
 

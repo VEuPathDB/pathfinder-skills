@@ -240,3 +240,42 @@ def build_sheet(search_data, query=None):
         "params_template": template,
         "hidden_params_submitted_automatically": hidden,
     }
+
+
+def param_options(search_data, param_name, query=None, limit=200):
+    by_name = {p["name"]: p for p in search_data.get("parameters", [])}
+    if param_name not in by_name:
+        return {
+            "error": "unknown parameter",
+            "did_you_mean": difflib.get_close_matches(
+                param_name, list(by_name), n=5, cutoff=0.5
+            ),
+            "valid": sorted(by_name),
+        }
+    p = by_name[param_name]
+    v = p.get("vocabulary")
+    if v is None:
+        return {"param": param_name, "type": p["type"], "total": 0, "shown": 0,
+                "options": [], "note": "parameter has no vocabulary (free-text)"}
+    if is_tree(v):
+        entries = tree_entries(v)
+    else:
+        entries = [
+            {"term": row[0], "display": row[1], "parent": row[2], "leaf": True}
+            for row in v
+        ]
+    if query:
+        q = query.lower()
+        entries = [
+            e
+            for e in entries
+            if q in e["term"].lower() or q in (e["display"] or "").lower()
+        ]
+    total_all = len(tree_entries(v)) if is_tree(v) else len(v)
+    return {
+        "param": param_name,
+        "type": p["type"],
+        "total": total_all,
+        "shown": min(len(entries), limit),
+        "options": entries[:limit],
+    }
