@@ -29,3 +29,4 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | CNT-3 | `wdk.py count vectorbase GenesByMolecularWeight --params '{"organism": ["Anopheles gambiae PEST"]}'` / test_reports.py::test_live_count_vectorbase | >0, within range | range ±20% of gold | 6755 | 2026-08-27 |
 | RES-1 | `wdk.py results plasmodb --step <step_id> --limit 2` / test_results.py::test_live_step_records | 2 records with gene ids | fields-present | — | 2026-08-27 |
 | DL-1 | `wdk.py download-url plasmodb --step <step_id>` / test_results.py::test_live_download_url | URL containing /temporary-results/ | fields-present | report=attributesTabular | 2026-08-27 |
+| E2E-1 | VectorBase MW intersect (10–50k ∩ 40–100k) Anopheles gambiae PEST | full lifecycle: catalog → inspect → count → create → results → delete | exact url | https://vectorbase.org/vectorbase/app/workspace/strategies/330622833 | 2026-08-27 |
