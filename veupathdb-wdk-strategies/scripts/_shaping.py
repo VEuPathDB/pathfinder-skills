@@ -279,3 +279,129 @@ def param_options(search_data, param_name, query=None, limit=200):
         "shown": min(len(entries), limit),
         "options": entries[:limit],
     }
+
+
+class ParamError(Exception):
+    pass
+
+
+COUNT_FIELDS = (
+    "displayViewTotalCount",
+    "viewTotalCount",
+    "displayTotalCount",
+    "totalCount",
+)
+
+
+def _as_list(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value.strip().startswith("["):
+        return json.loads(value)
+    return [value]
+
+
+def encode_params(search_data, user_params):
+    params = search_data.get("parameters", [])
+    by_name = {p["name"]: p for p in params}
+    unknown = sorted(set(user_params) - set(by_name))
+    if unknown:
+        hints = {
+            u: difflib.get_close_matches(u, list(by_name), n=3, cutoff=0.5)
+            for u in unknown
+        }
+        raise ParamError(
+            f"unknown parameter(s) {unknown}; did you mean: {hints}? "
+            f"valid: {sorted(by_name)}"
+        )
+    wire, missing = {}, []
+    for p in params:
+        name, ptype = p["name"], p["type"]
+        if ptype == "input-step":
+            wire[name] = ""
+            continue
+        supplied = name in user_params and user_params[name] is not None
+        value = user_params[name] if supplied else p.get("initialDisplayValue")
+        if value is None:
+            if not p.get("allowEmptyValue", False) and p.get("isVisible", True):
+                missing.append(name)
+            wire[name] = ""
+            continue
+        vocab = p.get("vocabulary")
+        if ptype == "multi-pick-vocabulary":
+            items = [str(i) for i in _as_list(value)]
+            if is_tree(vocab):
+                leaves, bad = expand_to_leaves(vocab, items)
+                if bad:
+                    all_terms = [e["term"] for e in tree_entries(vocab)]
+                    hints = {
+                        b: difflib.get_close_matches(b, all_terms, n=3, cutoff=0.5)
+                        for b in bad
+                    }
+                    raise ParamError(f"unknown value(s) for '{name}': {hints}")
+                items = leaves
+            elif isinstance(vocab, list):
+                valid = set(flat_terms(vocab))
+                bad = [i for i in items if i not in valid]
+                if bad:
+                    hints = {
+                        b: difflib.get_close_matches(b, sorted(valid), n=3, cutoff=0.5)
+                        for b in bad
+                    }
+                    raise ParamError(f"unknown value(s) for '{name}': {hints}")
+            wire[name] = json.dumps(items)
+        else:
+            sval = str(value)
+            if (
+                ptype == "single-pick-vocabulary"
+                and isinstance(vocab, list)
+                and sval not in set(flat_terms(vocab))
+            ):
+                hint = difflib.get_close_matches(
+                    sval, flat_terms(vocab), n=3, cutoff=0.5
+                )
+                raise ParamError(
+                    f"'{sval}' is not in the vocabulary of '{name}'; "
+                    f"did you mean {hint}?"
+                )
+            wire[name] = sval
+    if missing:
+        raise ParamError(
+            f"required parameter(s) with no value and no default: {missing}"
+        )
+    return wire
+
+
+def extract_count(meta):
+    for field in COUNT_FIELDS:
+        if meta.get(field) is not None:
+            return meta[field], field
+    return None, None
+
+
+def shape_records(response):
+    meta = response.get("meta", {})
+    count, field = extract_count(meta)
+    return {
+        "count": count if count is not None else "unmeasured",
+        "count_field": field,
+        "counts": {f: meta.get(f) for f in COUNT_FIELDS},
+        "records": [
+            {
+                "id": {part["name"]: part["value"] for part in r.get("id", [])},
+                "displayName": r.get("displayName"),
+                "attributes": r.get("attributes", {}),
+            }
+            for r in response.get("records", [])
+        ],
+    }
+
+
+def run_report(client, rt, search, wire_params, num_records=1, attributes=None):
+    body = {
+        "searchConfig": {"parameters": wire_params},
+        "reportConfig": {"pagination": {"offset": 0, "numRecords": num_records}},
+    }
+    if attributes:
+        body["reportConfig"]["attributes"] = attributes
+    return client.post(f"/record-types/{rt}/searches/{search}/reports/standard", body)

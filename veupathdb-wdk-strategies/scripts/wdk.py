@@ -160,6 +160,67 @@ def cmd_param_options(args) -> None:
     emit(out)
 
 
+def _load_params(raw):
+    try:
+        params = json.loads(raw)
+    except json.JSONDecodeError as e:
+        fail(f"--params is not valid JSON: {e}")
+    if not isinstance(params, dict):
+        fail("--params must be a JSON object of {param: value}")
+    return params
+
+
+def _prepared(args):
+    from _client import fetch_catalog
+    from _shaping import ParamError, encode_params, get_search_detail
+
+    c = client(args.site)
+    cat = fetch_catalog(c)
+    rt = _resolve_or_fail(cat, args.search, args.site)
+    detail = get_search_detail(c, rt, args.search)
+    try:
+        wire = encode_params(detail, _load_params(args.params))
+    except ParamError as e:
+        fail(str(e))
+    return c, rt, wire
+
+
+def cmd_count(args) -> None:
+    from _shaping import extract_count, run_report
+
+    c, rt, wire = _prepared(args)
+    resp = run_report(c, rt, args.search, wire, num_records=1)
+    count, field = extract_count(resp.get("meta", {}))
+    emit(
+        {
+            "search": args.search,
+            "count": count if count is not None else "unmeasured",
+            "count_field": field,
+            "counts": {
+                k: resp.get("meta", {}).get(k)
+                for k in (
+                    "displayViewTotalCount",
+                    "viewTotalCount",
+                    "displayTotalCount",
+                    "totalCount",
+                )
+            },
+        }
+    )
+
+
+def cmd_preview(args) -> None:
+    from _shaping import run_report, shape_records
+
+    c, rt, wire = _prepared(args)
+    attrs = args.attributes.split(",") if args.attributes else None
+    emit(
+        shape_records(
+            run_report(c, rt, args.search, wire, num_records=args.limit, attributes=attrs)
+        )
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -211,6 +272,20 @@ def build_parser() -> argparse.ArgumentParser:
                     help="values for params this vocabulary depends on")
     sp.add_argument("--limit", type=int, default=200)
     sp.set_defaults(func=cmd_param_options)
+
+    sp = sub.add_parser("count", help="result count without creating anything (anonymous report)")
+    sp.add_argument("site")
+    sp.add_argument("search")
+    sp.add_argument("--params", required=True, help='JSON object, e.g. \'{"organism": ["Plasmodium"]}\'')
+    sp.set_defaults(func=cmd_count)
+
+    sp = sub.add_parser("preview", help="sample records without creating anything")
+    sp.add_argument("site")
+    sp.add_argument("search")
+    sp.add_argument("--params", required=True)
+    sp.add_argument("--limit", type=int, default=5)
+    sp.add_argument("--attributes", help="comma-separated attribute names")
+    sp.set_defaults(func=cmd_preview)
 
     return p
 

@@ -18,3 +18,6 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | INS-3 | `wdk.py inspect plasmodb GenesByMolecularWieght` | did-you-mean GenesByMolecularWeight, exit 1 | exact | — | 2026-08-27 |
 | OPT-1 | `wdk.py param-options plasmodb GenesByGoTerm go_typeahead --query kinase` | filtered options + context_note naming go_term_slim | fields-present | shown=155 | 2026-08-27 |
 | OPT-2 | `wdk.py param-options plasmodb GenesByGoTerm go_typahead` | did_you_mean includes go_typeahead | exact | — | 2026-08-27 |
+| CNT-1 | `wdk.py count plasmodb GenesByMolecularWeight --params '{"organism": ["Plasmodium falciparum 3D7"]}'` | 2365 genes | range 1800–3000 | 2365 | 2026-08-27 |
+| CNT-2 | `wdk.py count plasmodb GenesByMolecularWeight --params '{"organism": ["Plasmodium"]}'` | > CNT-1 count | range | 157941 | 2026-08-27 |
+| PRV-1 | `wdk.py preview plasmodb GenesByMolecularWeight --params '{"organism": ["Plasmodium falciparum 3D7"]}' --limit 3` | 3 records with gene_source_id ids | fields-present | first id PF3D7_0100200 | 2026-08-27 |
