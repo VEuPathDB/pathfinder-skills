@@ -1,5 +1,7 @@
 # Gold-standard test registry
 
+Gold standards captured live on 2026-08-27. Counts drift with VEuPathDB data releases (~4/year): a `range` failure within ~20% of gold means re-capture, not code bug. Any other failure is a regression.
+
 Live services drift with data releases; each case states its tolerance:
 `exact` | `range` (± stated) | `fields-present`.
 Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
