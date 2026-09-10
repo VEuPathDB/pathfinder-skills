@@ -221,6 +221,57 @@ def cmd_preview(args) -> None:
     )
 
 
+def cmd_create_strategy(args) -> None:
+    from _client import fetch_catalog
+    from _shaping import ParamError
+    from _strategy import SpecError, build_strategy
+
+    c = client(args.site)
+    try:
+        spec = json.loads(args.spec)
+    except json.JSONDecodeError as e:
+        fail(f"--spec is not valid JSON: {e}")
+    try:
+        emit(build_strategy(c, fetch_catalog(c), spec, args.name))
+    except (SpecError, ParamError) as e:
+        fail(str(e))
+
+
+def cmd_strategy(args) -> None:
+    from _strategy import shape_strategy
+
+    c = client(args.site)
+    uid = c.user_id()
+    emit(shape_strategy(args.site, c.get(f"/users/{uid}/strategies/{args.id}")))
+
+
+def cmd_list_strategies(args) -> None:
+    from _sites import strategy_url
+
+    c = client(args.site)
+    uid = c.user_id()
+    strategies = c.get(f"/users/{uid}/strategies")
+    emit(
+        [
+            {
+                "strategy_id": s.get("strategyId", s.get("id")),
+                "name": s.get("name"),
+                "url": strategy_url(args.site, s.get("strategyId", s.get("id"))),
+            }
+            for s in strategies
+        ]
+    )
+
+
+def cmd_delete_strategy(args) -> None:
+    if not args.yes:
+        fail("refusing to delete without --yes")
+    c = client(args.site)
+    uid = c.user_id()
+    c.delete(f"/users/{uid}/strategies/{args.id}")
+    emit({"deleted": args.id})
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -286,6 +337,27 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--limit", type=int, default=5)
     sp.add_argument("--attributes", help="comma-separated attribute names")
     sp.set_defaults(func=cmd_preview)
+
+    sp = sub.add_parser("create-strategy", help="create steps + strategy from a declarative JSON spec")
+    sp.add_argument("site")
+    sp.add_argument("--spec", required=True, help="JSON node tree; see references/strategies.md")
+    sp.add_argument("--name", default="wdk.py strategy")
+    sp.set_defaults(func=cmd_create_strategy)
+
+    sp = sub.add_parser("strategy", help="strategy detail: tree, counts, url")
+    sp.add_argument("site")
+    sp.add_argument("id", type=int)
+    sp.set_defaults(func=cmd_strategy)
+
+    sp = sub.add_parser("list-strategies", help="list your strategies on a site")
+    sp.add_argument("site")
+    sp.set_defaults(func=cmd_list_strategies)
+
+    sp = sub.add_parser("delete-strategy", help="delete a strategy (destructive)")
+    sp.add_argument("site")
+    sp.add_argument("id", type=int)
+    sp.add_argument("--yes", action="store_true")
+    sp.set_defaults(func=cmd_delete_strategy)
 
     return p
 

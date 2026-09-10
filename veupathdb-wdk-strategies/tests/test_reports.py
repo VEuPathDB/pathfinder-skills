@@ -23,3 +23,15 @@ def test_live_preview_records(live_client):
     shaped = shape_records(resp)
     assert len(shaped["records"]) == 3
     assert "gene_source_id" in shaped["records"][0]["id"]
+
+
+def test_live_count_vectorbase(token):
+    from _client import Client
+    from _shaping import encode_params, extract_count, get_search_detail, run_report
+
+    c = Client("vectorbase", token=token)
+    detail = get_search_detail(c, "transcript", "GenesByMolecularWeight")
+    wire = encode_params(detail, {"organism": ["Anopheles gambiae PEST"]})
+    resp = run_report(c, "transcript", "GenesByMolecularWeight", wire)
+    count, _ = extract_count(resp["meta"])
+    assert 5400 <= count <= 8100  # gold 6755 on 2026-08-27; ±20%
