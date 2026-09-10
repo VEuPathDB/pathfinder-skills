@@ -19,11 +19,13 @@ REGISTERED user's token — WDK silently mints guests otherwise. Verify first:
 
 Details and how to obtain a token: references/auth.md
 
-## Resolving gene symbols & names (don't web-search first!)
+## Resolving gene symbols & names (don't web-search or use external APIs first!)
 
-When asked about a gene by symbol, name, or product (e.g. `PGRPLB`, `K13`):
-- **Do NOT reach for WebSearch** to look up accession IDs (`AGAP...`, `PF3D7_...`).
-  Web searches often yield wrong-species orthologs or outdated gene models.
+When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
+- **Do NOT reach for WebSearch or external APIs (NCBI, Ensembl, etc.)** to look
+  up accession IDs (`AGAP...`, `PF3D7_...`) or to "cross-check" annotations.
+  VEuPathDB is the primary authority for these genomes; external resources
+  frequently use different gene models, ortholog mappings, or obsolete builds.
 - **Resolve with `GenesByText` preview first**:
   ```bash
   uv run scripts/wdk.py preview SITE GenesByText \
@@ -33,7 +35,7 @@ When asked about a gene by symbol, name, or product (e.g. `PGRPLB`, `K13`):
   Tip: to match symbols specifically, add `"text_fields": ["name", "Alias"]` to `--params`.
 - **When is WebSearch acceptable?** ONLY as a fallback if VEuPathDB text search
   returns 0 hits, specifically to discover published nomenclature/hyphenation
-  variants (e.g. `PGRP-LB` vs `PGRPLB`) or synonym aliases. Once a synonym is
+  variants (e.g. `SRPN-2` vs `SRPN2`) or synonym aliases. Once a synonym is
   found, return to `GenesByText` or `fetch-record` inside VEuPathDB.
 
 ## The workflow
@@ -98,9 +100,9 @@ When asked about a gene by symbol, name, or product (e.g. `PGRPLB`, `K13`):
   covered value, never one representative.
 - **Defaults are disclosed**: params you leave null use the search default
   (shown in the sheet) — tell the user which defaults applied.
-- **Resolve symbols via `GenesByText`, not WebSearch.** WDK indexes gene
-  symbols, aliases, and products. Web searches frequently confuse mosquito,
-  fly, and human ortholog IDs or surface outdated gene models.
+- **Resolve symbols via `GenesByText`, not WebSearch or external APIs (NCBI, Ensembl).**
+  VEuPathDB is the primary authority for these genome annotations; external
+  databases often use different coordinate systems or outdated gene builds.
 
 ## Deeper reference (read on demand)
 
