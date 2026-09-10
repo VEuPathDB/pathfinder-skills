@@ -108,6 +108,15 @@ def cmd_inspect(args) -> None:
     emit(build_sheet(get_search_detail(c, rt, args.search), query=args.query))
 
 
+def cmd_inspect_record_type(args) -> None:
+    from _client import fetch_record_type
+    from _shaping import shape_record_type
+
+    c = client(args.site)
+    raw = fetch_record_type(c, args.record_type, refresh=args.refresh)
+    emit(shape_record_type(raw, query=args.query))
+
+
 def _parse_kv(pairs):
     out = {}
     for pair in pairs or []:
@@ -411,11 +420,25 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--limit", type=int, default=20)
     sp.set_defaults(func=cmd_find_searches)
 
-    sp = sub.add_parser("inspect", help="shaped parameter sheet for one search")
+    sp = sub.add_parser(
+        "inspect-search",
+        aliases=["inspect"],
+        help="shaped parameter sheet for one search",
+    )
     sp.add_argument("site")
     sp.add_argument("search")
     sp.add_argument("--query", help="hint used to shortlist huge vocabularies")
     sp.set_defaults(func=cmd_inspect)
+
+    sp = sub.add_parser(
+        "inspect-record-type",
+        help="inspect a record type schema (primary key, attributes, tables)",
+    )
+    sp.add_argument("site")
+    sp.add_argument("record_type")
+    sp.add_argument("--query", help="filter attributes and tables by keyword")
+    sp.add_argument("--refresh", action="store_true", help="bypass 7-day disk cache")
+    sp.set_defaults(func=cmd_inspect_record_type)
 
     sp = sub.add_parser("param-options", help="browse/filter a parameter's vocabulary")
     sp.add_argument("site")

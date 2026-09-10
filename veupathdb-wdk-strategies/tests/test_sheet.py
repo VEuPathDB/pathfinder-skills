@@ -79,3 +79,48 @@ def test_resolve_search_did_you_mean(live_client):
     assert rt == "transcript"
     rt, sugg = resolve_search(cat, "GenesByMolecularWieght")
     assert rt is None and "GenesByMolecularWeight" in sugg
+
+
+def test_shape_record_type_offline():
+    from _shaping import shape_record_type
+
+    mock_raw = {
+        "urlSegment": "gene",
+        "displayName": "Gene",
+        "primaryKeyColumnRefs": ["source_id", "project_id"],
+        "attributes": [
+            {"name": "primary_key", "displayName": "Gene ID", "columnDataType": "STRING"},
+            {"name": "exon_count", "displayName": "# Exons in Gene", "columnDataType": "NUMBER"},
+            {"name": "name", "displayName": "Gene Name", "columnDataType": "STRING"},
+        ],
+        "tables": [
+            {
+                "name": "GeneTranscripts",
+                "displayName": "Transcripts",
+                "attributes": [
+                    {"name": "transcript_id"},
+                    {"name": "exon_count"},
+                ],
+            },
+            {
+                "name": "GeneModelDump",
+                "displayName": "Gene Model",
+                "attributes": [{"name": "sequence_id"}],
+            },
+        ],
+    }
+
+    # Without query
+    shaped = shape_record_type(mock_raw)
+    assert shaped["record_type"] == "gene"
+    assert shaped["primary_key"] == ["source_id", "project_id"]
+    assert len(shaped["attributes"]) == 3
+    assert len(shaped["tables"]) == 2
+    assert shaped["tables"][0]["columns"] == ["transcript_id", "exon_count"]
+
+    # With query "exon"
+    q_shaped = shape_record_type(mock_raw, query="exon")
+    assert q_shaped["matching_attributes"] == 1
+    assert q_shaped["attributes"][0]["name"] == "exon_count"
+    assert q_shaped["matching_tables"] == 1
+    assert q_shaped["tables"][0]["name"] == "GeneTranscripts"

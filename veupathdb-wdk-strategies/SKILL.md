@@ -28,7 +28,7 @@ Details and how to obtain a token: references/auth.md
    tagged seed/filter/transform". The dump is ~25–75k tokens. No sub-agents
    available? Read the dump yourself. `find-searches SITE QUERY` is a quick
    lexical fallback when you already know roughly the name.
-3. **Inspect each candidate**: `inspect SITE SEARCH [--query HINT]` returns the
+3. **Inspect each candidate**: `inspect-search SITE SEARCH [--query HINT]` returns the
    parameter sheet: required/optional params, defaults, vocabularies
    (truncated over 200 — fetch more with `param-options`), dependency notes,
    and `params_template` (copy it, fill values, null = use default).
@@ -45,7 +45,8 @@ Details and how to obtain a token: references/auth.md
    SAME property → UNION; distinct required properties → INTERSECT; nest
    multi-evidence branches (A ∩ (B ∪ C) ≠ (A ∩ B) ∪ C).
 6. **Fetch results & records**: `results SITE --step ID`, `download-url SITE --step ID`.
-   To inspect an individual gene or record: `fetch-record SITE ID [--tables TBLS]`.
+   Discover schema: `inspect-record-type SITE RT [--query Q]` (PK, attributes, tables).
+   Inspect single record: `fetch-record SITE ID [--tables TBLS]`.
    Manage: `strategy`, `list-strategies`, `delete-strategy ... --yes`.
 
 ## Subcommands
@@ -55,10 +56,11 @@ Details and how to obtain a token: references/auth.md
 | sites | list site ids and service URLs |
 | whoami SITE | verify token, print numeric user id |
 | record-types SITE | list record type segments |
+| inspect-record-type SITE RT [--query Q] | record schema: PK, attributes, tables |
 | searches SITE RT | searches for one record type (TSV) |
 | catalog SITE [--record-type RT] [--refresh] | full compact catalog (TSV) — discovery input |
 | find-searches SITE QUERY | lexical convenience lookup |
-| inspect SITE SEARCH [--query HINT] | shaped parameter sheet |
+| inspect-search SITE SEARCH [--query HINT] | parameter sheet (alias: inspect) |
 | param-options SITE SEARCH PARAM [--query Q] [--context P=V] | browse a vocabulary |
 | count SITE SEARCH --params JSON | count without creating anything |
 | preview SITE SEARCH --params JSON [--limit N] | sample records, no writes |

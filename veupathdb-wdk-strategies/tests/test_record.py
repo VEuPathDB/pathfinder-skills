@@ -59,3 +59,30 @@ def test_live_fetch_transcript_record(token):
     }
     data = c.post("/record-types/transcript/records", payload, idempotent=True)
     assert data["attributes"]["exon_count"] == "3"
+
+
+def test_live_inspect_record_type_gene_vectorbase(token):
+    from _client import fetch_record_type
+    from _shaping import shape_record_type
+
+    c = Client("vectorbase", token=token)
+    raw = fetch_record_type(c, "gene")
+    shaped = shape_record_type(raw, query="exon")
+    assert shaped["record_type"] == "gene"
+    assert shaped["primary_key"] == ["source_id", "project_id"]
+    assert any(a["name"] == "exon_count" for a in shaped["attributes"])
+    assert any(t["name"] == "GeneTranscripts" for t in shaped["tables"])
+
+
+def test_live_inspect_record_type_transcript_vectorbase(token):
+    from _client import fetch_record_type
+    from _shaping import shape_record_type
+
+    c = Client("vectorbase", token=token)
+    raw = fetch_record_type(c, "transcript")
+    shaped = shape_record_type(raw, query="exon")
+    assert shaped["record_type"] == "transcript"
+    assert shaped["primary_key"] == ["gene_source_id", "source_id", "project_id"]
+    assert shaped["matching_attributes"] >= 1
+    assert any(a["name"] == "exon_count" for a in shaped["attributes"])
+

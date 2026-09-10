@@ -405,3 +405,60 @@ def run_report(client, rt, search, wire_params, num_records=1, attributes=None):
     if attributes:
         body["reportConfig"]["attributes"] = attributes
     return client.post(f"/record-types/{rt}/searches/{search}/reports/standard", body)
+
+
+def shape_record_type(raw, query=None):
+    rt_name = raw.get("urlSegment") or raw.get("name")
+    display_name = raw.get("displayName", "")
+    pk = raw.get("primaryKeyColumnRefs", [])
+
+    raw_attrs = raw.get("attributes", [])
+    raw_tables = raw.get("tables", [])
+
+    q = query.lower() if query else None
+
+    attrs = []
+    for a in raw_attrs:
+        name = a.get("name", "")
+        disp = a.get("displayName", "")
+        dtype = a.get("columnDataType", "STRING")
+        if q is None or q in name.lower() or q in disp.lower():
+            attrs.append({"name": name, "displayName": disp, "type": dtype})
+
+    tables = []
+    for t in raw_tables:
+        name = t.get("name", "")
+        disp = t.get("displayName", "")
+        cols = [c.get("name", "") for c in t.get("attributes", [])]
+        if (
+            q is None
+            or q in name.lower()
+            or q in disp.lower()
+            or any(q in c.lower() for c in cols)
+        ):
+            tables.append({"name": name, "displayName": disp, "columns": cols})
+
+    out = {
+        "record_type": rt_name,
+        "displayName": display_name,
+        "primary_key": pk,
+        "total_attributes": len(raw_attrs),
+        "total_tables": len(raw_tables),
+    }
+
+    if q:
+        out["query"] = query
+        out["matching_attributes"] = len(attrs)
+        out["matching_tables"] = len(tables)
+        out["attributes"] = attrs
+        out["tables"] = tables
+    else:
+        if len(attrs) > 60:
+            out["attributes"] = attrs[:50]
+            out["attributes_note"] = (
+                f"showing first 50 of {len(raw_attrs)} attributes; use --query to filter"
+            )
+        else:
+            out["attributes"] = attrs
+        out["tables"] = tables
+    return out

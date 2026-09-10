@@ -1,4 +1,5 @@
 """WDK transport. Auth is a COOKIE (Authorization=<token>), exactly one pair."""
+import difflib
 import json
 import os
 import pathlib
@@ -162,3 +163,32 @@ def fetch_catalog(client, refresh=False):
     }
     cache.write_text(json.dumps(catalog))
     return catalog
+
+
+def fetch_record_type(client, record_type, refresh=False):
+    """Fetch expanded record-type definition. Disk-cached 7 days per site/rt."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache = CACHE_DIR / f"{client.site_id}_rt_{record_type}.json"
+    if (
+        not refresh
+        and cache.is_file()
+        and time.time() - cache.stat().st_mtime < CACHE_TTL_S
+    ):
+        return json.loads(cache.read_text())
+    try:
+        raw = client.get(f"/record-types/{record_type}", params={"format": "expanded"})
+    except WDKError as err:
+        try:
+            all_rts = client.get("/record-types")
+        except Exception:
+            all_rts = []
+        hint = difflib.get_close_matches(record_type, all_rts, n=3, cutoff=0.5)
+        if hint:
+            raise WDKError(
+                f"unknown record type '{record_type}'; did you mean {hint}? Valid: {sorted(all_rts)}",
+                status=404,
+                endpoint=f"/record-types/{record_type}",
+            ) from None
+        raise err
+    cache.write_text(json.dumps(raw))
+    return raw

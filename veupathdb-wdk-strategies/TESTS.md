@@ -15,9 +15,11 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | CAT-3 | `wdk.py catalog vectorbase` | as CAT-2 | range ±20% | 995 lines | 2026-08-27 |
 | CAT-4 | `wdk.py catalog toxodb` | as CAT-2 | range ±20% | 385 lines | 2026-08-27 |
 | FIND-1 | `wdk.py find-searches plasmodb "GO term"` | GenesByGoTerm in top 5 | fields-present | rank=1 | 2026-08-27 |
-| INS-1 | `wdk.py inspect plasmodb GenesByMolecularWeight` | 3 visible params; organism tree; min default 10000 | exact (offline fixture) | see tests/fixtures/mw.json | 2026-08-27 |
-| INS-2 | `wdk.py inspect plasmodb GenesByGoTerm --query kinase` | go_typeahead shortlisted with note (5992 total) | range: total >5000 | 5992 | 2026-08-27 |
-| INS-3 | `wdk.py inspect plasmodb GenesByMolecularWieght` | did-you-mean GenesByMolecularWeight, exit 1 | exact | — | 2026-08-27 |
+| INS-1 | `wdk.py inspect-search plasmodb GenesByMolecularWeight` | 3 visible params; organism tree; min default 10000 | exact (offline fixture) | see tests/fixtures/mw.json | 2026-08-27 |
+| INS-2 | `wdk.py inspect-search plasmodb GenesByGoTerm --query kinase` | go_typeahead shortlisted with note (5992 total) | range: total >5000 | 5992 | 2026-08-27 |
+| INS-3 | `wdk.py inspect-search plasmodb GenesByMolecularWieght` | did-you-mean GenesByMolecularWeight, exit 1 | exact | — | 2026-08-27 |
+| INS-4 | `wdk.py inspect-record-type vectorbase gene --query exon` / test_record.py::test_live_inspect_record_type_gene_vectorbase | primary_key has source_id/project_id; attributes has exon_count; tables has GeneTranscripts | fields-present | PK=['source_id', 'project_id'] | 2026-09-10 |
+| INS-5 | `wdk.py inspect-record-type vectorbase genee` | did-you-mean gene, exit 1 | exact | error: unknown record type 'genee' | 2026-09-10 |
 | OPT-1 | `wdk.py param-options plasmodb GenesByGoTerm go_typeahead --query kinase` | filtered options + context_note naming go_term_slim | fields-present | shown=155 | 2026-08-27 |
 | OPT-2 | `wdk.py param-options plasmodb GenesByGoTerm go_typahead` | did_you_mean includes go_typeahead | exact | — | 2026-08-27 |
 | CNT-1 | `wdk.py count plasmodb GenesByMolecularWeight --params '{"organism": ["Plasmodium falciparum 3D7"]}'` | 2365 genes | range 1800–3000 | 2365 | 2026-08-27 |
