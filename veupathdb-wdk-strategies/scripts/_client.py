@@ -59,6 +59,7 @@ class Client:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if token:
             headers["Cookie"] = f"Authorization={token}"
+            headers["Authorization"] = f"Bearer {token}"
         self._http = httpx.Client(
             base_url=service_url(site_id),
             headers=headers,

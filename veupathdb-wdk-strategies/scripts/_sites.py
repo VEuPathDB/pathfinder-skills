@@ -40,6 +40,10 @@ def service_url(site_id: str) -> str:
     return _site(site_id)["base_url"]
 
 
+def project_id(site_id: str) -> str:
+    return _site(site_id)["project_id"]
+
+
 def web_base_url(site_id: str) -> str:
     return _site(site_id)["base_url"].removesuffix("/service")
 

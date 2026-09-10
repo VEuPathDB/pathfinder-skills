@@ -22,7 +22,7 @@ def test_auth_is_a_single_cookie_pair():
 
     assert _client(handler).get("/x") == {"ok": True}
     assert seen["cookie"] == "Authorization=tok-x"
-    assert seen["auth_header"] is None
+    assert seen["auth_header"] == "Bearer tok-x"
 
 
 def test_retries_5xx_then_succeeds():

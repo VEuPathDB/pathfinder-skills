@@ -306,6 +306,75 @@ def cmd_download_url(args) -> None:
     emit({"download_url": f"{service_url(args.site)}/temporary-results/{resp['id']}"})
 
 
+def cmd_fetch_record(args) -> None:
+    from _sites import project_id
+
+    c = client(args.site)
+    rt = args.record_type
+    if args.primary_key:
+        try:
+            pk_val = json.loads(args.primary_key)
+            if isinstance(pk_val, dict):
+                pk = [{"name": k, "value": str(v)} for k, v in pk_val.items()]
+            elif isinstance(pk_val, list):
+                pk = pk_val
+            else:
+                fail("--primary-key must be a JSON object or array of {name, value}")
+        except json.JSONDecodeError as e:
+            fail(f"--primary-key is not valid JSON: {e}")
+    elif args.id:
+        if rt in ("gene", "organism"):
+            pk = [
+                {"name": "source_id", "value": args.id},
+                {"name": "project_id", "value": project_id(args.site)},
+            ]
+        elif rt == "transcript":
+            if not args.gene_id:
+                fail("record-type transcript requires --gene-id or --primary-key")
+            pk = [
+                {"name": "gene_source_id", "value": args.gene_id},
+                {"name": "source_id", "value": args.id},
+                {"name": "project_id", "value": project_id(args.site)},
+            ]
+        else:
+            pk = [{"name": "source_id", "value": args.id}]
+    else:
+        fail("either ID argument or --primary-key is required")
+
+    if args.attributes:
+        attrs = [a.strip() for a in args.attributes.split(",") if a.strip()]
+    elif rt == "gene":
+        attrs = [
+            "primary_key",
+            "source_id",
+            "name",
+            "product",
+            "organism",
+            "gene_type",
+            "exon_count",
+            "transcript_count",
+            "location_text",
+        ]
+    else:
+        attrs = ["primary_key"]
+
+    tbls = [t.strip() for t in args.tables.split(",") if t.strip()] if args.tables else []
+
+    payload = {
+        "primaryKey": pk,
+        "attributes": attrs,
+        "tables": tbls,
+    }
+    res = c.post(f"/record-types/{rt}/records", payload, idempotent=True)
+    emit({
+        "id": res.get("id"),
+        "displayName": res.get("displayName"),
+        "recordClassName": res.get("recordClassName"),
+        "attributes": res.get("attributes", {}),
+        "tables": res.get("tables", {}),
+    })
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -406,6 +475,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--report", default="attributesTabular")
     sp.add_argument("--config", help="JSON reportConfig override")
     sp.set_defaults(func=cmd_download_url)
+
+    sp = sub.add_parser("fetch-record", help="fetch a single record (e.g. gene) with attributes/tables")
+    sp.add_argument("site")
+    sp.add_argument("id", nargs="?", help="record primary identifier (e.g. AGAP001212)")
+    sp.add_argument("--record-type", default="gene", help="record type (default: gene)")
+    sp.add_argument("--gene-id", help="parent gene ID if record-type is transcript")
+    sp.add_argument("--primary-key", help="JSON override for primaryKey list/dict")
+    sp.add_argument("--attributes", help="comma-separated attribute names")
+    sp.add_argument("--tables", help="comma-separated table names (e.g. GeneTranscripts)")
+    sp.set_defaults(func=cmd_fetch_record)
 
     return p
 

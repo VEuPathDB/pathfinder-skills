@@ -9,9 +9,10 @@ as `VEUPATHDB_BEARER_TOKEN` or in `.env` at the repo root (gitignored).
 
 ## How auth actually works (distilled from pathfinder's WDK rules)
 
-- The token travels as a COOKIE: `Cookie: Authorization=<token>`. Never as an
-  `Authorization:` header. Tomcat honors the FIRST cookie pair if duplicates
-  are sent — the client here sends exactly one.
+- The token travels as both a COOKIE: `Cookie: Authorization=<token>` (honored
+  by Tomcat for `/users/…` strategy paths) and an `Authorization: Bearer <token>`
+  header (required by `POST /record-types/…/records`). Tomcat honors the FIRST
+  cookie pair if duplicates are sent — the client sends exactly one cookie pair.
 - An uncredentialed request is NOT rejected: WDK mints a fresh guest user per
   request. Guests get 401s on `/users/…` programmatic paths (VEuPathDB policy
   since 2026-08-19) and results that silently belong to nobody. Always verify

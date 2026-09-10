@@ -44,7 +44,8 @@ Details and how to obtain a token: references/auth.md
    give that URL to the user. Combine semantics: alternative evidence for the
    SAME property → UNION; distinct required properties → INTERSECT; nest
    multi-evidence branches (A ∩ (B ∪ C) ≠ (A ∩ B) ∪ C).
-6. **Fetch results**: `results SITE --step ID`, `download-url SITE --step ID`.
+6. **Fetch results & records**: `results SITE --step ID`, `download-url SITE --step ID`.
+   To inspect an individual gene or record: `fetch-record SITE ID [--tables TBLS]`.
    Manage: `strategy`, `list-strategies`, `delete-strategy ... --yes`.
 
 ## Subcommands
@@ -66,6 +67,7 @@ Details and how to obtain a token: references/auth.md
 | delete-strategy SITE ID --yes | destructive |
 | results SITE --step ID | records for a step |
 | download-url SITE --step ID | temporary download URL |
+| fetch-record SITE [ID] [--tables T] | single record details/tables (e.g. GeneTranscripts) |
 
 ## Top gotchas (full list: references/gotchas.md)
 
