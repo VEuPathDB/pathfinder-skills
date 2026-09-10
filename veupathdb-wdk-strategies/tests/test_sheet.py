@@ -124,3 +124,43 @@ def test_shape_record_type_offline():
     assert q_shaped["attributes"][0]["name"] == "exon_count"
     assert q_shaped["matching_tables"] == 1
     assert q_shaped["tables"][0]["name"] == "GeneTranscripts"
+
+
+def test_shape_record_offline():
+    from _shaping import clean_table_row, shape_record
+
+    raw_row = {
+        "organism": "Anopheles albimanus STECLA",
+        "ortho_gene_source_id": "AALB005865",
+        "clustalInput": "<input type=\"checkbox\" name=\"gene_ids\">",
+        "sort_key": "some_padding_key_123",
+        "gene": {"displayText": "AALB005865-RA", "url": "/app/record/gene"},
+    }
+    cleaned = clean_table_row(raw_row)
+    assert "clustalInput" not in cleaned
+    assert "sort_key" not in cleaned
+    assert cleaned["ortho_gene_source_id"] == "AALB005865"
+
+    mock_record = {
+        "id": [{"name": "source_id", "value": "AGAP006348"}],
+        "displayName": "AGAP006348",
+        "recordClassName": "GeneRecordClass",
+        "attributes": {"primary_key": "AGAP006348", "name": "LRIM1"},
+        "tables": {
+            "Orthologs": [
+                raw_row,
+                {
+                    "organism": "Culex pipiens",
+                    "ortho_gene_source_id": "CPIP001",
+                    "sort_key": "key2",
+                },
+            ]
+        },
+    }
+
+    # Filtered by "albimanus"
+    shaped = shape_record(mock_record, filter_query="albimanus")
+    assert shaped["filter"] == "albimanus"
+    assert len(shaped["tables"]["Orthologs"]) == 1
+    assert shaped["tables"]["Orthologs"][0]["organism"] == "Anopheles albimanus STECLA"
+    assert shaped["attributes"]["name"] == "LRIM1"

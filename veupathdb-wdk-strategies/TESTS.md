@@ -32,5 +32,8 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | RES-1 | `wdk.py results plasmodb --step <step_id> --limit 2` / test_results.py::test_live_step_records | 2 records with gene ids | fields-present | — | 2026-08-27 |
 | DL-1 | `wdk.py download-url plasmodb --step <step_id>` / test_results.py::test_live_download_url | URL containing /temporary-results/ | fields-present | report=attributesTabular | 2026-08-27 |
 | REC-1 | `wdk.py fetch-record vectorbase AGAP001212 --tables GeneTranscripts` / test_record.py::test_live_fetch_gene_record_vectorbase | name=PGRPLB, exon_count=3, GeneTranscripts table | fields-present | name=PGRPLB, exon_count=3 | 2026-09-10 |
+| REC-2 | `wdk.py fetch-record vectorbase AGAP006348 --tables Orthologs --filter albimanus` / test_record.py::test_live_fetch_record_filter_tables | 2 albimanus rows, clustalInput/sort_key stripped | fields-present | 2 rows (AALB20_030456, AALB005865) | 2026-09-10 |
 | E2E-1 | VectorBase MW intersect (10–50k ∩ 40–100k) Anopheles gambiae PEST | full lifecycle: catalog → inspect → count → create → results → delete | exact url | https://vectorbase.org/vectorbase/app/workspace/strategies/330622833 | 2026-08-27 |
 | PROMPT-1 | "How many exons does the longest transcript of Anopheles gambiae gene PGPRLB have?" | VectorBase, gene AGAP001212, longest transcript exon count: 3 | exact | site=VectorBase, gene=AGAP001212, exon_count=3 | 2026-09-10 |
+| PROMPT-2 | "What is the Anopheles albimanus ortholog of Anopheles gambiae LRIM1 (AGAP006348)?" | VectorBase, gene AGAP006348, Orthologs table filtered to Anopheles albimanus (AALB20_030456 / AALB005865) | exact | site=VectorBase, gene=AGAP006348, orthologs=[AALB20_030456, AALB005865] | 2026-09-10 |
+

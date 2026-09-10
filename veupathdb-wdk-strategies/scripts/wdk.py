@@ -114,7 +114,8 @@ def cmd_inspect_record_type(args) -> None:
 
     c = client(args.site)
     raw = fetch_record_type(c, args.record_type, refresh=args.refresh)
-    emit(shape_record_type(raw, query=args.query))
+    f = getattr(args, "filter", None) or getattr(args, "query", None)
+    emit(shape_record_type(raw, query=f))
 
 
 def _parse_kv(pairs):
@@ -375,13 +376,10 @@ def cmd_fetch_record(args) -> None:
         "tables": tbls,
     }
     res = c.post(f"/record-types/{rt}/records", payload, idempotent=True)
-    emit({
-        "id": res.get("id"),
-        "displayName": res.get("displayName"),
-        "recordClassName": res.get("recordClassName"),
-        "attributes": res.get("attributes", {}),
-        "tables": res.get("tables", {}),
-    })
+    from _shaping import shape_record
+
+    emit(shape_record(res, filter_query=getattr(args, "filter", None)))
+
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -427,7 +425,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.add_argument("site")
     sp.add_argument("search")
-    sp.add_argument("--query", help="hint used to shortlist huge vocabularies")
+    sp.add_argument(
+        "--filter",
+        "--query",
+        dest="query",
+        help="hint used to shortlist huge vocabularies",
+    )
     sp.set_defaults(func=cmd_inspect)
 
     sp = sub.add_parser(
@@ -436,17 +439,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.add_argument("site")
     sp.add_argument("record_type")
-    sp.add_argument("--query", help="filter attributes and tables by keyword")
-    sp.add_argument("--refresh", action="store_true", help="bypass 7-day disk cache")
+    sp.add_argument(
+        "--filter",
+        "--query",
+        dest="filter",
+        help="filter attributes and tables by keyword",
+    )
+    sp.add_argument(
+        "--refresh", action="store_true", help="bypass 7-day disk cache"
+    )
     sp.set_defaults(func=cmd_inspect_record_type)
 
-    sp = sub.add_parser("param-options", help="browse/filter a parameter's vocabulary")
+    sp = sub.add_parser(
+        "param-options", help="browse/filter a parameter's vocabulary"
+    )
     sp.add_argument("site")
     sp.add_argument("search")
     sp.add_argument("param")
-    sp.add_argument("--query", help="case-insensitive substring filter")
-    sp.add_argument("--context", nargs="*", metavar="PARENT=VALUE",
-                    help="values for params this vocabulary depends on")
+    sp.add_argument(
+        "--filter",
+        "--query",
+        dest="query",
+        help="case-insensitive substring filter",
+    )
+    sp.add_argument(
+        "--context",
+        nargs="*",
+        metavar="PARENT=VALUE",
+        help="values for params this vocabulary depends on",
+    )
     sp.add_argument("--limit", type=int, default=200)
     sp.set_defaults(func=cmd_param_options)
 
@@ -506,7 +527,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--gene-id", help="parent gene ID if record-type is transcript")
     sp.add_argument("--primary-key", help="JSON override for primaryKey list/dict")
     sp.add_argument("--attributes", help="comma-separated attribute names")
-    sp.add_argument("--tables", help="comma-separated table names (e.g. GeneTranscripts)")
+    sp.add_argument("--tables", help="comma-separated table names (e.g. GeneTranscripts, Orthologs)")
+    sp.add_argument(
+        "--filter",
+        "--query",
+        dest="filter",
+        help="case-insensitive substring filter for table rows and attributes",
+    )
     sp.set_defaults(func=cmd_fetch_record)
 
     return p

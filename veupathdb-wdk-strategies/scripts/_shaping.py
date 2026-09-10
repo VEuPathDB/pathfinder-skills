@@ -447,7 +447,7 @@ def shape_record_type(raw, query=None):
     }
 
     if q:
-        out["query"] = query
+        out["filter"] = query
         out["matching_attributes"] = len(attrs)
         out["matching_tables"] = len(tables)
         out["attributes"] = attrs
@@ -456,9 +456,62 @@ def shape_record_type(raw, query=None):
         if len(attrs) > 60:
             out["attributes"] = attrs[:50]
             out["attributes_note"] = (
-                f"showing first 50 of {len(raw_attrs)} attributes; use --query to filter"
+                f"showing first 50 of {len(raw_attrs)} attributes; use --filter to filter"
             )
         else:
             out["attributes"] = attrs
         out["tables"] = tables
     return out
+
+
+def clean_table_row(row: dict) -> dict:
+    out = {}
+    for k, v in row.items():
+        if k in ("sort_key", "sortKey", "clustalInput"):
+            continue
+        if isinstance(v, str) and (v.startswith("<input") or v.startswith("<button")):
+            continue
+        out[k] = v
+    return out
+
+
+def shape_record(raw: dict, filter_query: str | None = None) -> dict:
+    raw_tables = raw.get("tables", {})
+    raw_attrs = raw.get("attributes", {})
+
+    tables = {}
+    for t_name, rows in raw_tables.items():
+        cleaned = [clean_table_row(r) for r in rows]
+        if filter_query:
+            q = filter_query.lower()
+            cleaned = [
+                r
+                for r in cleaned
+                if q
+                in " ".join(
+                    str(v.get("displayText", v) if isinstance(v, dict) else v)
+                    for v in r.values()
+                ).lower()
+            ]
+        tables[t_name] = cleaned
+
+    attrs = raw_attrs
+    if filter_query and not raw_tables:
+        q = filter_query.lower()
+        attrs = {
+            k: v
+            for k, v in raw_attrs.items()
+            if q in k.lower() or q in str(v).lower()
+        }
+
+    out = {
+        "id": raw.get("id"),
+        "displayName": raw.get("displayName"),
+        "recordClassName": raw.get("recordClassName"),
+    }
+    if filter_query:
+        out["filter"] = filter_query
+    out["attributes"] = attrs
+    out["tables"] = tables
+    return out
+

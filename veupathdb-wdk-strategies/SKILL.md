@@ -64,8 +64,8 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
    SAME property → UNION; distinct required properties → INTERSECT; nest
    multi-evidence branches (A ∩ (B ∪ C) ≠ (A ∩ B) ∪ C).
 6. **Fetch results & records**: `results SITE --step ID`, `download-url SITE --step ID`.
-   Discover schema: `inspect-record-type SITE RT [--query Q]` (PK, attributes, tables).
-   Inspect single record: `fetch-record SITE ID [--tables TBLS]`.
+   Discover schema: `inspect-record-type SITE RT [--filter Q]` (PK, attributes, tables).
+   Inspect record/tables: `fetch-record SITE ID [--tables TBLS] [--filter TEXT]`.
    Manage: `strategy`, `list-strategies`, `delete-strategy ... --yes`.
 
 ## Subcommands
@@ -75,12 +75,12 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 | sites | list site ids and service URLs |
 | whoami SITE | verify token, print numeric user id |
 | record-types SITE | list record type segments |
-| inspect-record-type SITE RT [--query Q] | record schema: PK, attributes, tables |
+| inspect-record-type SITE RT [--filter Q] | record schema: PK, attributes, tables |
 | searches SITE RT | searches for one record type (TSV) |
 | catalog SITE [--record-type RT] [--refresh] | full compact catalog (TSV) — discovery input |
 | find-searches SITE QUERY | lexical convenience lookup |
-| inspect-search SITE SEARCH [--query HINT] | parameter sheet (alias: inspect) |
-| param-options SITE SEARCH PARAM [--query Q] [--context P=V] | browse a vocabulary |
+| inspect-search SITE SEARCH [--filter HINT] | parameter sheet (alias: inspect) |
+| param-options SITE SEARCH PARAM [--filter Q] [--context P=V] | browse a vocabulary |
 | count SITE SEARCH --params JSON | count without creating anything |
 | preview SITE SEARCH --params JSON [--limit N] | sample records, no writes |
 | create-strategy SITE --spec JSON [--name S] | steps + strategy, returns URL |
@@ -88,7 +88,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 | delete-strategy SITE ID --yes | destructive |
 | results SITE --step ID | records for a step |
 | download-url SITE --step ID | temporary download URL |
-| fetch-record SITE [ID] [--tables T] | single record details/tables (e.g. GeneTranscripts) |
+| fetch-record SITE [ID] [--tables T] [--filter F] | record details/tables with row filtering |
 
 ## Top gotchas (full list: references/gotchas.md)
 

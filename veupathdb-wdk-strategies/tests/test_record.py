@@ -86,3 +86,43 @@ def test_live_inspect_record_type_transcript_vectorbase(token):
     assert shaped["matching_attributes"] >= 1
     assert any(a["name"] == "exon_count" for a in shaped["attributes"])
 
+
+def test_live_fetch_record_filter_tables(token):
+    from _shaping import shape_record
+
+    c = Client("vectorbase", token=token)
+    payload = {
+        "primaryKey": [
+            {"name": "source_id", "value": "AGAP006348"},
+            {"name": "project_id", "value": project_id("vectorbase")},
+        ],
+        "attributes": ["primary_key", "name"],
+        "tables": ["Orthologs"],
+    }
+    raw = c.post("/record-types/gene/records", payload, idempotent=True)
+    shaped = shape_record(raw, filter_query="albimanus")
+    rows = shaped["tables"]["Orthologs"]
+    assert len(rows) == 2
+    for r in rows:
+        assert "albimanus" in r["organism"].lower()
+        assert "clustalInput" not in r
+        assert "sort_key" not in r
+    assert shaped["attributes"]["name"] == "LRIM1"
+
+
+def test_live_fetch_record_filter_attributes(token):
+    from _shaping import shape_record
+
+    c = Client("vectorbase", token=token)
+    payload = {
+        "primaryKey": [
+            {"name": "source_id", "value": "AGAP001212"},
+            {"name": "project_id", "value": project_id("vectorbase")},
+        ],
+        "attributes": ["primary_key", "name", "exon_count"],
+        "tables": [],
+    }
+    raw = c.post("/record-types/gene/records", payload, idempotent=True)
+    shaped = shape_record(raw, filter_query="exon")
+    assert shaped["attributes"] == {"exon_count": "3"}
+
