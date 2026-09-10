@@ -272,6 +272,40 @@ def cmd_delete_strategy(args) -> None:
     emit({"deleted": args.id})
 
 
+def cmd_results(args) -> None:
+    from _shaping import shape_records
+
+    c = client(args.site)
+    uid = c.user_id()
+    body = {"reportConfig": {"pagination": {"offset": 0, "numRecords": args.limit}}}
+    if args.attributes:
+        body["reportConfig"]["attributes"] = args.attributes.split(",")
+    emit(shape_records(c.post(f"/users/{uid}/steps/{args.step}/reports/standard", body)))
+
+
+def cmd_download_url(args) -> None:
+    from _sites import service_url
+
+    c = client(args.site)
+    if args.config:
+        try:
+            config = json.loads(args.config)
+        except json.JSONDecodeError as e:
+            fail(f"--config is not valid JSON: {e}")
+    else:
+        config = {
+            "attributes": ["primary_key"],
+            "includeHeader": True,
+            "attachmentType": "plain",
+        }
+    resp = c.post(
+        "/temporary-results",
+        {"stepId": args.step, "reportName": args.report, "reportConfig": config},
+        idempotent=False,
+    )
+    emit({"download_url": f"{service_url(args.site)}/temporary-results/{resp['id']}"})
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -358,6 +392,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("id", type=int)
     sp.add_argument("--yes", action="store_true")
     sp.set_defaults(func=cmd_delete_strategy)
+
+    sp = sub.add_parser("results", help="records for an existing step")
+    sp.add_argument("site")
+    sp.add_argument("--step", type=int, required=True)
+    sp.add_argument("--limit", type=int, default=20)
+    sp.add_argument("--attributes")
+    sp.set_defaults(func=cmd_results)
+
+    sp = sub.add_parser("download-url", help="temporary download URL for a step's results")
+    sp.add_argument("site")
+    sp.add_argument("--step", type=int, required=True)
+    sp.add_argument("--report", default="attributesTabular")
+    sp.add_argument("--config", help="JSON reportConfig override")
+    sp.set_defaults(func=cmd_download_url)
 
     return p
 

@@ -25,3 +25,5 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | STR-2 | `wdk.py strategy plasmodb <strategy_id>` | same shape as create output | fields-present | — | 2026-08-27 |
 | STR-3 | `wdk.py delete-strategy plasmodb <strategy_id>` (without `--yes`) | refuses without `--yes`, exit 1 | exact | error: refusing to delete without --yes | 2026-08-27 |
 | CNT-3 | `wdk.py count vectorbase GenesByMolecularWeight --params '{"organism": ["Anopheles gambiae PEST"]}'` / test_reports.py::test_live_count_vectorbase | >0, within range | range ±20% of gold | 6755 | 2026-08-27 |
+| RES-1 | `wdk.py results plasmodb --step <step_id> --limit 2` / test_results.py::test_live_step_records | 2 records with gene ids | fields-present | — | 2026-08-27 |
+| DL-1 | `wdk.py download-url plasmodb --step <step_id>` / test_results.py::test_live_download_url | URL containing /temporary-results/ | fields-present | report=attributesTabular | 2026-08-27 |
