@@ -676,6 +676,8 @@ def shape_expression_data(
     all_samples: bool = False,
     min_percentile: float | None = None,
     sort_by: str = "percentile",
+    max_datasets: int = 20,
+    all_datasets: bool = False,
 ) -> dict:
     cfg = OMICS_TYPES.get(omics_type, OMICS_TYPES["expression"])
     attrs = raw_record.get("attributes", {})
@@ -822,6 +824,15 @@ def shape_expression_data(
                 filtered.append(d_copy)
         processed_datasets = filtered
 
+    # Sort datasets descending by max_percentile (or sample_count) so peak expression datasets appear first
+    processed_datasets.sort(
+        key=lambda d: (
+            d["max_percentile"] if d.get("max_percentile") is not None else -1,
+            d["sample_count"],
+        ),
+        reverse=True,
+    )
+
     out["matching_datasets"] = len(processed_datasets)
 
     # Decide sample visibility
@@ -829,12 +840,23 @@ def shape_expression_data(
     if summary or bare_invocation:
         for d in processed_datasets:
             d.pop("_all_samples", None)
-        out["datasets"] = processed_datasets
-        if bare_invocation and len(processed_datasets) > 0:
+            d.pop("y_axis", None)
+            if len(processed_datasets) > 1:
+                d.pop("summary", None)
+        total_matching = len(processed_datasets)
+        if not all_datasets and total_matching > max_datasets:
+            out["datasets"] = processed_datasets[:max_datasets]
             out["note"] = (
-                f"Showing compact summary of {len(processed_datasets)} datasets. "
-                f"Use --filter <term> to search or --dataset <id> to view all samples."
+                f"Showing top {max_datasets} of {total_matching} datasets ranked by peak expression. "
+                f"Use --all-datasets to view all, --filter <term> to search, or --dataset <id> to view all samples."
             )
+        else:
+            out["datasets"] = processed_datasets
+            if bare_invocation and total_matching > 0:
+                out["note"] = (
+                    f"Showing compact summary of {total_matching} datasets ranked by peak expression. "
+                    f"Use --filter <term> to search or --dataset <id> to view all samples."
+                )
         return out
 
     # Display samples

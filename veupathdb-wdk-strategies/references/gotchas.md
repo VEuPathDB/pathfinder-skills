@@ -38,10 +38,23 @@ there (docs/knowledge/wdk/rules). The CLI guards the starred ones.
     "[]" as the unselected initial display value for params like `text_search_organism`
     and `organism`, but requires at least 1 selection. `encode_params` enforces
     this locally instead of sending an empty list that triggers HTTP 422.
-16. ★ Gene expression data lives in paired tables, not simple attributes:
-    Attributes like `ai_expression` on `gene` or transcript records return null or 500.
-    Quantitative RNA-seq and microarray data are stored across paired tables
-    (`ExpressionGraphs` for dataset metadata and `ExpressionGraphsDataTable` for sample
-    measurements). Use `wdk.py expression <site> <gene_id>` to query joined, ranked
-    expression profiles across datasets without manual scripts or token blowouts.
+16. ★ `ai_expression` is an out-of-scope web UI flag, not an expression summary:
+    In gene record inspection, you may see an attribute named `ai_expression` ('AI Expression Summary').
+    This is merely a UI flag indicating that an AI-powered summary tool exists on the website;
+    it is run on-demand by users and cached outside WDK (costing ~USD $1 per gene).
+    It is strictly **out of scope** for `wdk.py` and this skill. Do NOT query `ai_expression`,
+    do NOT attempt to invoke or scrape it via browser automation, and do NOT write scripts
+    trying to find pre-cached AI summaries.
+17. ★ Gene expression data lives in paired tables; summarize directly from the ranked catalog:
+    Quantitative RNA-seq and microarray data are stored across paired tables (`ExpressionGraphs`
+    and `ExpressionGraphsDataTable`). `wdk.py expression <site> <gene_id>` automatically joins them,
+    ranks datasets by peak percentile, and provides `top_sample` for each.
+    - When asked for a summary of gene expression, summarize directly from this top-ranked catalog:
+      datasets with percentiles ≥90–95% immediately reveal the primary tissues, life stages, and
+      treatments where the gene is active.
+    - Do NOT write custom Python scripts in the scratch directory or attempt to dump all samples
+      across dozens of datasets (`all_samples`).
+    - Use `--filter <keyword>` (e.g. `--filter gut`) or `--dataset <id>` only when drill-down
+      into specific conditions or tissues is explicitly requested.
+
 

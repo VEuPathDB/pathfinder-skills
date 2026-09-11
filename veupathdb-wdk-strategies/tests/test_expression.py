@@ -185,3 +185,17 @@ def test_live_expression_vectorbase_filter(token):
     res = shape_expression_data(raw, site="vectorbase", filter_query="body")
     assert res["matching_datasets"] >= 1
     assert any("samples" in d for d in res["datasets"])
+
+
+def test_shape_expression_max_datasets_offline():
+    res = shape_expression_data(_mock_record(), site="vectorbase", max_datasets=1)
+    assert res["matching_datasets"] == 2
+    assert len(res["datasets"]) == 1
+    assert "Showing top 1 of 2 datasets" in res["note"]
+
+    # all_datasets overrides max_datasets
+    res_all = shape_expression_data(
+        _mock_record(), site="vectorbase", max_datasets=1, all_datasets=True
+    )
+    assert len(res_all["datasets"]) == 2
+

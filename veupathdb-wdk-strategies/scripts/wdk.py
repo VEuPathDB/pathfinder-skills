@@ -672,6 +672,8 @@ def cmd_expression(args) -> None:
         all_samples=args.all_samples,
         min_percentile=args.min_percentile,
         sort_by=args.sort_by,
+        max_datasets=args.max_datasets,
+        all_datasets=args.all_datasets,
     )
     emit(shaped)
 
@@ -922,6 +924,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["percentile", "value"],
         default="percentile",
         help="sort samples by 'percentile' (default) or raw abundance 'value'",
+    )
+    sp.add_argument(
+        "--max-datasets",
+        type=int,
+        default=20,
+        help="maximum number of datasets to show in catalog summary (default: 20)",
+    )
+    sp.add_argument(
+        "--all-datasets",
+        action="store_true",
+        help="show all datasets in catalog summary instead of capping to top datasets",
     )
     sp.set_defaults(func=cmd_expression)
 

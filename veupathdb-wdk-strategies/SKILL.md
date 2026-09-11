@@ -164,6 +164,12 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
   standard default columns (`defaultAttributes`, e.g. `gene_product`, `organism`,
   `primary_key`), exactly matching the website results table. Specify `--attributes` only
   when requesting custom non-default attributes.
+- **Gene expression summaries and `ai_expression`**: To summarize transcript expression,
+  run `wdk.py expression <site> <gene>`. The CLI outputs datasets ranked by peak percentile
+  with their `top_sample` (e.g. 95th+ percentile) — summarize directly from this output.
+  Do NOT write custom scripts in `scratch/` to dump all raw samples across dozens of
+  datasets. The `ai_expression` attribute is an external web UI flag and is strictly
+  **out of scope** (do not query, scrape, or automate it).
 
 ## Deeper reference (read on demand)
 
@@ -173,5 +179,6 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 - references/gotchas.md — every known silent-failure mode
 
 Out of scope (v1): semantic search, site-search, control tests, enrichment,
-step analyses, filters, phyletic profile patterns, dataset/basket uploads, EDA.
+step analyses, filters, phyletic profile patterns, dataset/basket uploads, EDA,
+web UI `ai_expression` summaries.
 Tests + gold standards: TESTS.md.
