@@ -47,5 +47,8 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | AUTH-5 | `login_with_credentials(site, email, pass)` / test_client.py::test_login_with_credentials_success | authenticates via POST /login, extracts cookie token, verifies user | exact (offline) | status=200, uid=555 | 2026-09-11 |
 | SITE-1 | `wdk.py detect-site "<query>"` / test_client.py::test_cli_detect_site & test_sites.py::test_detect_site_from_queries | maps organism/pathogen/vector keywords to community site (toxodb, vectorbase, etc.) with veupathdb fallback | exact | community site id + URLs | 2026-09-11 |
 | ENC-1 | `encode_params(_mw(), {})` & `encode_params(_mw(), {"organism": []})` / test_encode.py::test_missing_required_multipick_raises_param_error | catches unselected/empty required multi-pick parameters locally; instructs param-options | exact (offline) | ParamError naming parameter and options | 2026-09-11 |
+| EXPR-1 | `wdk.py expression vectorbase AGAP009221 --dataset DS_46d69d95d1` / test_expression.py | joins ExpressionGraphs and ExpressionGraphsDataTable; ranks samples descending by percentile; supports summary and keyword filters | fields-present | total_datasets=40, top_sample="carcass: male (val: 9.23, pct: 97.1%)" | 2026-09-11 |
+| PROMPT-3 | "Where is Anopheles gambiae SRPN5 (AGAP009221) expressed across body parts and tissues?" | VectorBase, `wdk.py expression vectorbase AGAP009221 --filter body` or `--dataset DS_46d69d95d1` | exact | site=VectorBase, top_tissues=[carcass male (97.1%), head male (97.0%), whole body male (96.0%), maxillary palps female (97.8%)] | 2026-09-11 |
+
 
 

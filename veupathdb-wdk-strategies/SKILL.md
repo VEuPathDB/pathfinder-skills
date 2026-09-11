@@ -110,6 +110,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 6. **Fetch results & records**: `results SITE --step ID`, `download-url SITE --step ID`.
    Discover schema: `inspect-record-type SITE RT [--filter Q]` (PK, attributes, tables).
    Inspect record/tables: `fetch-record SITE ID [--tables TBLS] [--filter TEXT]`.
+   Transcriptomics & expression: `expression SITE GENE [--type T] [--filter Q] [--dataset DS]`.
    Manage: `strategy`, `list-strategies`, `delete-strategy ... --yes`.
 
 ## Subcommands
@@ -136,6 +137,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 | results SITE --step ID [--limit N] [--attributes A] | records for a step (defaults to search's standard attributes) |
 | download-url SITE --step ID | temporary download URL |
 | fetch-record SITE [ID] [--tables T] [--filter F] | record details/tables with row filtering |
+| expression SITE GENE [--type T] [--filter Q] [--dataset DS] | transcriptomics & 'omics expression (joined datasets + ranked samples) |
 
 ## Top gotchas (full list: references/gotchas.md)
 

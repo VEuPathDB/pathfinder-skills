@@ -38,3 +38,10 @@ there (docs/knowledge/wdk/rules). The CLI guards the starred ones.
     "[]" as the unselected initial display value for params like `text_search_organism`
     and `organism`, but requires at least 1 selection. `encode_params` enforces
     this locally instead of sending an empty list that triggers HTTP 422.
+16. ★ Gene expression data lives in paired tables, not simple attributes:
+    Attributes like `ai_expression` on `gene` or transcript records return null or 500.
+    Quantitative RNA-seq and microarray data are stored across paired tables
+    (`ExpressionGraphs` for dataset metadata and `ExpressionGraphsDataTable` for sample
+    measurements). Use `wdk.py expression <site> <gene_id>` to query joined, ranked
+    expression profiles across datasets without manual scripts or token blowouts.
+

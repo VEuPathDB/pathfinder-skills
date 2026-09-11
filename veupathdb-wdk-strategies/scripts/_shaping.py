@@ -626,3 +626,235 @@ def shape_record(raw: dict, filter_query: str | None = None) -> dict:
     out["tables"] = tables
     return out
 
+
+OMICS_TYPES = {
+    "expression": {
+        "graphs_table": "ExpressionGraphs",
+        "data_table": "ExpressionGraphsDataTable",
+        "value_col": "value",
+        "percentile_col": "percentile_channel1",
+        "error_col": "standard_error",
+        "label": "transcript expression",
+    },
+    "host-response": {
+        "graphs_table": "HostResponseGraphs",
+        "data_table": "HostResponseGraphsDataTable",
+        "value_col": "value",
+        "percentile_col": None,
+        "error_col": None,
+        "label": "host response expression",
+    },
+    "phenotype": {
+        "graphs_table": "PhenotypeScoreGraphs",
+        "data_table": "PhenotypeScoreGraphsDataTable",
+        "value_col": "phenotype_score",
+        "percentile_col": None,
+        "error_col": None,
+        "label": "phenotype scores",
+    },
+}
+
+
+def _parse_num(v):
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        return int(f) if f.is_integer() else round(f, 4)
+    except (ValueError, TypeError):
+        return None
+
+
+def shape_expression_data(
+    raw_record: dict,
+    site: str = "",
+    omics_type: str = "expression",
+    filter_query: str | None = None,
+    dataset_id: str | None = None,
+    summary: bool = False,
+    top: int | None = None,
+    all_samples: bool = False,
+    min_percentile: float | None = None,
+    sort_by: str = "percentile",
+) -> dict:
+    cfg = OMICS_TYPES.get(omics_type, OMICS_TYPES["expression"])
+    attrs = raw_record.get("attributes", {})
+    gene_id = attrs.get("primary_key") or raw_record.get("id")
+    gene_name = attrs.get("name")
+    product = attrs.get("product")
+    organism = strip_html(attrs.get("organism") or "")
+
+    raw_graphs = raw_record.get("tables", {}).get(cfg["graphs_table"], [])
+    raw_rows = raw_record.get("tables", {}).get(cfg["data_table"], [])
+
+    out = {
+        "gene": gene_id,
+        "name": gene_name,
+        "product": product,
+        "organism": organism,
+        "type": omics_type,
+        "total_datasets": len(raw_graphs),
+    }
+
+    if not raw_graphs and not raw_rows:
+        out["matching_datasets"] = 0
+        out["datasets"] = []
+        out["message"] = f"No {cfg['label']} datasets found for {gene_id} on {site}."
+        return out
+
+    rows_by_ds = {}
+    for r in raw_rows:
+        ds = r.get("dataset_id")
+        if ds:
+            rows_by_ds.setdefault(ds, []).append(r)
+
+    processed_datasets = []
+    for g in raw_graphs:
+        ds_id = g.get("dataset_id")
+        disp_name = strip_html(g.get("display_name") or "")
+        summary_txt = strip_html(g.get("summary") or "")
+        assay_type = g.get("assay_type")
+        y_axis = strip_html(g.get("y_axis") or "")
+        attribution = strip_html(g.get("short_attribution") or "")
+
+        raw_samples = rows_by_ds.get(ds_id, [])
+        samples = []
+        for s in raw_samples:
+            val = _parse_num(s.get(cfg["value_col"]))
+            pct = _parse_num(s.get(cfg["percentile_col"])) if cfg.get("percentile_col") else None
+            se = _parse_num(s.get(cfg["error_col"])) if cfg.get("error_col") else None
+
+            if min_percentile is not None and (pct is None or pct < min_percentile):
+                continue
+
+            entry = {"sample_name": s.get("sample_name"), "value": val}
+            if pct is not None or cfg.get("percentile_col"):
+                entry["percentile"] = pct
+            if se is not None:
+                entry["standard_error"] = se
+            if "score_type" in s:
+                entry["score_type"] = s.get("score_type")
+            samples.append(entry)
+
+        if sort_by == "value":
+            samples.sort(
+                key=lambda x: x["value"] if x.get("value") is not None else -float("inf"),
+                reverse=True,
+            )
+        else:
+            samples.sort(
+                key=lambda x: (
+                    x["percentile"] if x.get("percentile") is not None else -1,
+                    x["value"] if x.get("value") is not None else -float("inf"),
+                ),
+                reverse=True,
+            )
+
+        top_sample_str = None
+        if samples:
+            first = samples[0]
+            parts = []
+            if first.get("value") is not None:
+                parts.append(f"val: {first['value']}")
+            if first.get("percentile") is not None:
+                parts.append(f"pct: {first['percentile']}%")
+            if first.get("score_type"):
+                parts.append(f"score_type: {first['score_type']}")
+            desc = f" ({', '.join(parts)})" if parts else ""
+            top_sample_str = f"{first['sample_name']}{desc}"
+
+        ds_entry = {
+            "dataset_id": ds_id,
+            "display_name": disp_name,
+            "summary": summary_txt[:300] if summary_txt else "",
+            "assay_type": assay_type,
+            "y_axis": y_axis,
+            "sample_count": len(samples),
+            "max_percentile": samples[0].get("percentile") if samples else None,
+            "top_sample": top_sample_str,
+            "_all_samples": samples,
+        }
+        if attribution:
+            ds_entry["attribution"] = attribution
+        processed_datasets.append(ds_entry)
+
+    # Filter by dataset_id
+    if dataset_id:
+        out["dataset_filter"] = dataset_id
+        processed_datasets = [
+            d for d in processed_datasets if d["dataset_id"].lower() == dataset_id.lower()
+        ]
+        if not processed_datasets:
+            out["matching_datasets"] = 0
+            out["datasets"] = []
+            out["error"] = f"Dataset '{dataset_id}' not found for gene {gene_id}."
+            return out
+
+    # Filter by filter_query
+    if filter_query:
+        out["filter"] = filter_query
+        q = filter_query.lower()
+        filtered = []
+        for d in processed_datasets:
+            meta_match = q in d["display_name"].lower() or q in d["summary"].lower()
+            sample_matches = [
+                s for s in d["_all_samples"] if q in (s.get("sample_name") or "").lower()
+            ]
+            if meta_match:
+                filtered.append(d)
+            elif sample_matches:
+                # Specific samples matched query
+                d_copy = dict(d)
+                d_copy["_all_samples"] = sample_matches
+                d_copy["sample_count"] = len(sample_matches)
+                d_copy["max_percentile"] = (
+                    sample_matches[0].get("percentile") if sample_matches else None
+                )
+                if sample_matches:
+                    first = sample_matches[0]
+                    parts = []
+                    if first.get("value") is not None:
+                        parts.append(f"val: {first['value']}")
+                    if first.get("percentile") is not None:
+                        parts.append(f"pct: {first['percentile']}%")
+                    desc = f" ({', '.join(parts)})" if parts else ""
+                    d_copy["top_sample"] = f"{first['sample_name']}{desc}"
+                filtered.append(d_copy)
+        processed_datasets = filtered
+
+    out["matching_datasets"] = len(processed_datasets)
+
+    # Decide sample visibility
+    bare_invocation = not dataset_id and not filter_query and not all_samples and top is None
+    if summary or bare_invocation:
+        for d in processed_datasets:
+            d.pop("_all_samples", None)
+        out["datasets"] = processed_datasets
+        if bare_invocation and len(processed_datasets) > 0:
+            out["note"] = (
+                f"Showing compact summary of {len(processed_datasets)} datasets. "
+                f"Use --filter <term> to search or --dataset <id> to view all samples."
+            )
+        return out
+
+    # Display samples
+    for d in processed_datasets:
+        all_s = d.pop("_all_samples", [])
+        if dataset_id or all_samples:
+            if top is not None:
+                d["samples"] = all_s[:top]
+                if len(all_s) > top:
+                    d["samples_note"] = f"showing top {top} of {len(all_s)} samples"
+            else:
+                d["samples"] = all_s
+        else:
+            limit = top if top is not None else 5
+            d["samples"] = all_s[:limit]
+            if len(all_s) > limit:
+                d["samples_note"] = (
+                    f"showing top {limit} of {len(all_s)} samples; use --all-samples to view all"
+                )
+
+    out["datasets"] = processed_datasets
+    return out
+

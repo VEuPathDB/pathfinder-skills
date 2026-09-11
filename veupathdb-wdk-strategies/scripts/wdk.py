@@ -626,6 +626,56 @@ def cmd_fetch_record(args) -> None:
     emit(shape_record(res, filter_query=getattr(args, "filter", None)))
 
 
+def cmd_expression(args) -> None:
+    from _sites import project_id
+    from _shaping import shape_expression_data, OMICS_TYPES
+
+    c = client(args.site)
+    gene_id = args.gene.strip()
+
+    omics_cfg = OMICS_TYPES.get(args.type)
+    if not omics_cfg:
+        fail(f"unknown --type '{args.type}'. Supported types: {list(OMICS_TYPES.keys())}")
+
+    pk = [
+        {"name": "source_id", "value": gene_id},
+        {"name": "project_id", "value": project_id(args.site)},
+    ]
+    payload = {
+        "primaryKey": pk,
+        "attributes": ["primary_key", "name", "product", "organism"],
+        "tables": [omics_cfg["graphs_table"], omics_cfg["data_table"]],
+    }
+
+    try:
+        res = c.post("/record-types/gene/records", payload, idempotent=True)
+    except Exception as e:
+        err_str = str(e)
+        if "404" in err_str or "Not Found" in err_str:
+            fail(
+                f"gene '{gene_id}' not found on {args.site}.\n"
+                f"If this is a gene symbol/name (e.g. 'SRPN5'), resolve the ID first with:\n"
+                f"  uv run scripts/wdk.py preview {args.site} GenesByText "
+                f"--params '{{\"text_expression\": \"{gene_id}\", \"text_search_organism\": [\"<Organism>\"], \"text_fields\": [\"name\", \"Alias\"]}}' "
+                f"--attributes primary_key,gene_name,gene_product"
+            )
+        raise
+
+    shaped = shape_expression_data(
+        res,
+        site=args.site,
+        omics_type=args.type,
+        filter_query=args.filter_query,
+        dataset_id=args.dataset_id,
+        summary=args.summary,
+        top=args.top,
+        all_samples=args.all_samples,
+        min_percentile=args.min_percentile,
+        sort_by=args.sort_by,
+    )
+    emit(shaped)
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wdk.py", description=__doc__)
@@ -819,6 +869,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="case-insensitive substring filter for table rows and attributes",
     )
     sp.set_defaults(func=cmd_fetch_record)
+
+    sp = sub.add_parser(
+        "expression",
+        aliases=["gene-expression"],
+        help="transcriptomics & 'omics expression data for a gene (joined datasets + ranked samples)",
+    )
+    sp.add_argument("site", help="site name (e.g. vectorbase, plasmodb)")
+    sp.add_argument("gene", help="gene source ID (e.g. AGAP009221, PF3D7_1127000)")
+    sp.add_argument(
+        "--type",
+        default="expression",
+        choices=["expression", "host-response", "phenotype"],
+        help="'omics type to query (default: expression)",
+    )
+    sp.add_argument(
+        "--filter",
+        "-f",
+        dest="filter_query",
+        help="filter datasets/samples by keyword (e.g. 'body', 'tissue', 'salivary')",
+    )
+    sp.add_argument(
+        "--dataset",
+        "-d",
+        dest="dataset_id",
+        help="filter to a specific dataset ID (e.g. DS_46d69d95d1) and show all its samples",
+    )
+    sp.add_argument(
+        "--summary",
+        action="store_true",
+        help="show dataset summary catalog only (omit sample measurements)",
+    )
+    sp.add_argument(
+        "--top",
+        "-n",
+        type=int,
+        default=None,
+        help="limit number of samples shown per dataset (default: 5 when displaying samples; all if --dataset)",
+    )
+    sp.add_argument(
+        "--all-samples",
+        action="store_true",
+        help="show all samples across all matching datasets",
+    )
+    sp.add_argument(
+        "--min-percentile",
+        type=float,
+        help="filter samples to those with percentile >= cutoff (e.g. 75)",
+    )
+    sp.add_argument(
+        "--sort-by",
+        choices=["percentile", "value"],
+        default="percentile",
+        help="sort samples by 'percentile' (default) or raw abundance 'value'",
+    )
+    sp.set_defaults(func=cmd_expression)
 
     return p
 
