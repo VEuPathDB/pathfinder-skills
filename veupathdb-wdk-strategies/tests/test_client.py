@@ -108,15 +108,169 @@ def test_guest_token_is_refused():
     assert "register" in str(e.value).lower()
 
 
-def test_load_token_env_then_dotenv(tmp_path, monkeypatch):
-    from _client import load_token
+def test_load_token_env_then_config(tmp_path, monkeypatch):
+    from _client import delete_token, load_token, save_token
 
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setenv("VEUPATHDB_BEARER_TOKEN", "from-env")
-    assert load_token(root=tmp_path) == "from-env"
+    assert load_token() == "from-env"
+
     monkeypatch.delenv("VEUPATHDB_BEARER_TOKEN")
-    (tmp_path / ".env").write_text('VEUPATHDB_BEARER_TOKEN="from-file"\n')
-    assert load_token(root=tmp_path) == "from-file"
-    assert load_token(root=tmp_path / "nowhere") is None
+    assert load_token() is None
+
+    p = save_token("from-config-file")
+    assert p == tmp_path / "veupathdb" / "token"
+    assert p.is_file()
+    assert (p.stat().st_mode & 0o777) == 0o600
+    assert load_token() == "from-config-file"
+
+    assert delete_token() is True
+    assert load_token() is None
+    assert delete_token() is False
+
+
+def test_verify_token_valid(monkeypatch):
+    from _client import Client, verify_token
+
+    def handler(request):
+        assert request.url.path.endswith("/users/current")
+        assert "Authorization=test-token" in request.headers.get("cookie", "")
+        return httpx.Response(200, json={"id": 12345, "email": "test@uni.edu", "isGuest": False})
+
+    real_init = Client.__init__
+
+    def mock_init(self, site_id, token=None, transport=None, backoff=0):
+        real_init(self, site_id, token=token, transport=httpx.MockTransport(handler), backoff=0)
+
+    monkeypatch.setattr(Client, "__init__", mock_init)
+
+    user = verify_token("plasmodb", "test-token")
+    assert user["id"] == 12345
+    assert user["email"] == "test@uni.edu"
+
+
+def test_verify_token_guest_refused(monkeypatch):
+    from _client import Client, GuestTokenError, verify_token
+
+    def handler(request):
+        return httpx.Response(200, json={"id": 999, "isGuest": True})
+
+    real_init = Client.__init__
+
+    def mock_init(self, site_id, token=None, transport=None, backoff=0):
+        real_init(self, site_id, token=token, transport=httpx.MockTransport(handler), backoff=0)
+
+    monkeypatch.setattr(Client, "__init__", mock_init)
+
+    with pytest.raises(GuestTokenError):
+        verify_token("plasmodb", "guest-token")
+
+
+def test_login_with_credentials_success(monkeypatch):
+    from _client import login_with_credentials
+
+    def handler(request):
+        if request.url.path.endswith("/login"):
+            data = json.loads(request.content)
+            assert data["email"] == "user@uni.edu"
+            assert data["password"] == "secret"
+            headers = [("Set-Cookie", "Authorization=new-login-token; Path=/; Max-Age=1000")]
+            return httpx.Response(200, headers=headers, json={"success": True})
+        elif request.url.path.endswith("/users/current"):
+            return httpx.Response(200, json={"id": 555, "email": "user@uni.edu", "isGuest": False})
+        return httpx.Response(404)
+
+    real_client = httpx.Client
+
+    def mock_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr("httpx.Client", mock_client)
+
+    token, user = login_with_credentials("plasmodb", "user@uni.edu", "secret")
+    assert token == "new-login-token"
+    assert user["id"] == 555
+
+
+def test_login_with_credentials_failure(monkeypatch):
+    from _client import WDKError, login_with_credentials
+
+    def handler(request):
+        return httpx.Response(200, json={"success": False, "message": "Invalid username or password"})
+
+    real_client = httpx.Client
+
+    def mock_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr("httpx.Client", mock_client)
+
+    with pytest.raises(WDKError) as exc:
+        login_with_credentials("plasmodb", "bad@uni.edu", "wrong")
+    assert "Invalid username or password" in str(exc.value)
+
+
+def test_cli_detect_site(capsys):
+    import wdk
+
+    p = wdk.build_parser()
+    args = p.parse_args(["detect-site", "Toxoplasma gondii kinase"])
+    args.func(args)
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["site"] == "toxodb"
+    assert data["project"] == "ToxoDB"
+    assert "profile#serviceAccess" in data["profile_url"]
+    assert "registration" in data["registration_url"]
+
+
+def test_cli_whoami_unauthenticated(tmp_path, monkeypatch, capsys):
+    import wdk
+
+    monkeypatch.delenv("VEUPATHDB_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    p = wdk.build_parser()
+    args = p.parse_args(["whoami", "toxodb"])
+    with pytest.raises(SystemExit) as exc:
+        args.func(args)
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "not logged in. VEuPathDB authentication is required." in err
+    assert "uv run scripts/wdk.py login toxodb" in err
+    assert "https://toxodb.org/toxo/app/user/profile#serviceAccess" in err
+    assert "https://toxodb.org/toxo/app/user/registration" in err
+
+
+def test_cli_login_token_and_logout(tmp_path, monkeypatch, capsys):
+    import wdk
+
+    monkeypatch.delenv("VEUPATHDB_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "_client.verify_token",
+        lambda site_id, tok: {"id": 1234, "email": "alice@test.org", "isGuest": False},
+    )
+
+    p = wdk.build_parser()
+    args = p.parse_args(["login", "plasmodb", "--token", "my-secret-key"])
+    args.func(args)
+    out = capsys.readouterr().out
+    assert "Authenticated: alice@test.org" in out
+    token_file = tmp_path / "veupathdb" / "token"
+    assert token_file.is_file()
+    assert token_file.read_text().strip() == "my-secret-key"
+    assert (token_file.stat().st_mode & 0o777) == 0o600
+
+    args_logout = p.parse_args(["logout"])
+    args_logout.func(args_logout)
+    out_logout = capsys.readouterr().out
+    assert "Logged out" in out_logout
+    assert not token_file.exists()
+
+
 
 
 def test_live_whoami(live_client):

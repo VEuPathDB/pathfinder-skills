@@ -13,7 +13,7 @@ def token():
 
     tok = load_token()
     if not tok:
-        pytest.skip("VEUPATHDB_BEARER_TOKEN not set (env or repo-root .env)")
+        pytest.skip("VEUPATHDB_BEARER_TOKEN not set (env or ~/.config/veupathdb/token)")
     return tok
 
 

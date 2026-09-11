@@ -35,17 +35,136 @@ class GuestTokenError(WDKError):
     pass
 
 
-def load_token(root=None):
+def config_dir() -> pathlib.Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = pathlib.Path(xdg) if xdg else (pathlib.Path.home() / ".config")
+    return base / "veupathdb"
+
+
+def token_path() -> pathlib.Path:
+    return config_dir() / "token"
+
+
+def save_token(token: str) -> pathlib.Path:
+    tok = token.strip()
+    if not tok:
+        raise ValueError("Cannot save empty token")
+    d = config_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(d, 0o700)
+    except OSError:
+        pass
+    p = token_path()
+    p.write_text(tok + "\n", encoding="utf-8")
+    try:
+        os.chmod(p, 0o600)
+    except OSError:
+        pass
+    return p
+
+
+def delete_token() -> bool:
+    p = token_path()
+    if p.is_file():
+        p.unlink()
+        return True
+    return False
+
+
+def load_token(root=None) -> str | None:
     tok = os.environ.get("VEUPATHDB_BEARER_TOKEN")
     if tok:
         return tok.strip()
-    env = pathlib.Path(root or REPO_ROOT) / ".env"
-    if env.is_file():
-        for line in env.read_text().splitlines():
-            line = line.strip()
-            if line.startswith("VEUPATHDB_BEARER_TOKEN="):
-                return line.split("=", 1)[1].strip().strip("\"'") or None
+    p = token_path()
+    if p.is_file():
+        try:
+            val = p.read_text(encoding="utf-8").strip()
+            if val:
+                return val
+        except OSError:
+            pass
     return None
+
+
+def verify_token(site_id: str, token: str) -> dict:
+    """Verify that a token belongs to a registered VEuPathDB user.
+
+    Returns the user dict from /users/current.
+    Raises GuestTokenError or WDKError on failure.
+    """
+    tok = token.strip()
+    if not tok:
+        raise ValueError("Token cannot be empty")
+    c = Client(site_id, token=tok)
+    user = c.get("/users/current")
+    if not isinstance(user, dict):
+        raise WDKError(f"Unexpected response from /users/current: {user}", endpoint="/users/current")
+    if user.get("isGuest"):
+        raise GuestTokenError(
+            "Token identifies a GUEST user; register at the site to obtain a registered-user token.",
+            endpoint="/users/current",
+        )
+    return user
+
+
+def login_with_credentials(
+    site_id: str, email: str, password: str, redirect_url: str | None = None
+) -> tuple[str, dict]:
+    """Authenticate against VEuPathDB with email and password.
+
+    Returns (token, user_dict).
+    Raises WDKError on failure.
+    """
+    site_url = service_url(site_id)
+    payload = {
+        "email": email.strip(),
+        "password": password,
+        "redirectUrl": redirect_url or site_url,
+    }
+    with httpx.Client(
+        base_url=site_url, timeout=SITES[site_id]["timeout"], follow_redirects=False
+    ) as http:
+        resp = http.post("/login", json=payload)
+
+    # 1. Extract Authorization cookie from Set-Cookie headers
+    token = None
+    for header in resp.headers.get_list("set-cookie"):
+        for part in header.split(";"):
+            part = part.strip()
+            if part.startswith("Authorization="):
+                token = part.split("=", 1)[1].strip('"')
+                break
+        if token:
+            break
+
+    if not token and "Authorization" in resp.cookies:
+        token = resp.cookies["Authorization"]
+
+    # 2. If token not found, inspect response for error message
+    if not token:
+        msg = "Invalid email or password"
+        if resp.status_code >= 400:
+            msg = f"Login failed (HTTP {resp.status_code}): {resp.text[:300]}"
+        else:
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    if data.get("message"):
+                        msg = data["message"]
+                    elif data.get("success") is False:
+                        msg = "Authentication failed: invalid username or password"
+            except Exception:
+                pass
+        raise WDKError(
+            msg,
+            status=resp.status_code if resp.status_code != 200 else 401,
+            endpoint="/login",
+        )
+
+    # 3. Verify token against /users/current
+    user = verify_token(site_id, token)
+    return token, user
 
 
 def _is_delayed(body):
@@ -114,7 +233,7 @@ class Client:
         if self._user_id is None:
             if not self.token:
                 raise GuestTokenError(
-                    "no token: set VEUPATHDB_BEARER_TOKEN (env or repo-root .env). "
+                    "no token: run 'wdk.py login' or set VEUPATHDB_BEARER_TOKEN. "
                     "Register at the site to obtain a registered-user token.",
                     endpoint="/users/current",
                 )

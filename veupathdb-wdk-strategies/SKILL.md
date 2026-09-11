@@ -12,12 +12,29 @@ date-pinned via `exclude-newer` in `~/.config/uv/uv.toml`.
 
 ## Auth (required for nearly everything)
 
-`VEUPATHDB_BEARER_TOKEN` env var, or `.env` at the repo root. Must be a
-REGISTERED user's token — WDK silently mints guests otherwise. Verify first:
+Stored at `~/.config/veupathdb/token` (mode 0600) or via `VEUPATHDB_BEARER_TOKEN` env var.
+Must be a REGISTERED user's token — WDK silently mints guests otherwise.
+
+Verify first:
 
     uv run scripts/wdk.py whoami plasmodb
 
-Details and how to obtain a token: references/auth.md
+If not authenticated or on first use, log in:
+
+    # Option A: Login with VEuPathDB email and password (interactive or scriptable)
+    uv run scripts/wdk.py login [site]
+    # or: uv run scripts/wdk.py login [site] --email <EMAIL> --password <PASSWORD>
+
+    # Option B: Use browser API key (User icon -> My Account -> Service Access tab)
+    uv run scripts/wdk.py login [site] --token <PASTED_KEY>
+
+    # Detect site from user's research question:
+    uv run scripts/wdk.py detect-site "Toxoplasma gondii rhoptry kinase"
+
+    # Log out:
+    uv run scripts/wdk.py logout
+
+Details and authentication guide: references/auth.md
 
 ## Resolving gene symbols & names (don't web-search or use external APIs first!)
 
@@ -74,6 +91,9 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 |---|---|
 | sites | list site ids and service URLs |
 | whoami SITE | verify token, print numeric user id |
+| login [SITE] [--token K] [--email E --password P] | authenticate and store token in ~/.config/veupathdb/token |
+| logout | remove stored token from ~/.config/veupathdb/token |
+| detect-site QUERY | detect VEuPathDB site and URLs from query text |
 | record-types SITE | list record type segments |
 | inspect-record-type SITE RT [--filter Q] [--name-only] [--exclude P] | record schema: PK, attributes, tables |
 | searches SITE RT | searches for one record type (TSV) |

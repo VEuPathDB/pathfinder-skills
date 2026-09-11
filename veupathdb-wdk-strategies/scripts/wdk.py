@@ -8,10 +8,20 @@
 Run `wdk.py --help` for subcommands, `wdk.py <sub> --help` for details.
 """
 import argparse
+import getpass
 import json
 import sys
 
-from _sites import SITES, UnknownSiteError, strategy_url
+from _sites import (
+    SITES,
+    UnknownSiteError,
+    detect_site,
+    profile_url,
+    project_id,
+    registration_url,
+    service_url,
+    strategy_url,
+)
 
 
 def emit(obj) -> None:
@@ -39,6 +49,22 @@ def cmd_sites(args) -> None:
 
 
 def cmd_whoami(args) -> None:
+    from _client import load_token
+
+    tok = load_token()
+    if not tok:
+        proj = project_id(args.site)
+        prof = profile_url(args.site)
+        reg = registration_url(args.site)
+        fail(
+            f"not logged in. VEuPathDB authentication is required.\n\n"
+            f"To log in with your email and password:\n"
+            f"  uv run scripts/wdk.py login {args.site}\n\n"
+            f"Or to use your browser API key:\n"
+            f"  1. Go to: {prof}\n"
+            f"  2. Run:   uv run scripts/wdk.py login {args.site} --token <PASTED_KEY>\n\n"
+            f"Need an account? Register at: {reg}"
+        )
     c = client(args.site)
     me = c.get("/users/current")
     if me.get("isGuest"):
@@ -47,6 +73,169 @@ def cmd_whoami(args) -> None:
             "registered-user bearer token"
         )
     emit({"site": args.site, "user_id": me["id"], "email": me.get("email")})
+
+
+def cmd_login(args) -> None:
+    from _client import (
+        login_with_credentials,
+        save_token,
+        token_path,
+        verify_token,
+    )
+
+    site_id = (args.site or "").strip().lower()
+    if not site_id:
+        if args.token or (args.email and args.password):
+            site_id = "veupathdb"
+        elif sys.stdin.isatty():
+            try:
+                choice_site = input("VEuPathDB site [veupathdb]: ").strip().lower()
+                site_id = choice_site if choice_site else "veupathdb"
+            except (KeyboardInterrupt, EOFError):
+                print()
+                sys.exit(1)
+        else:
+            site_id = "veupathdb"
+
+    if site_id not in SITES:
+        raise UnknownSiteError(
+            f"unknown site '{site_id}'; valid: {', '.join(sorted(SITES))}"
+        )
+
+    # 1. Direct token provided via flag
+    if args.token:
+        tok = args.token.strip()
+        print(f"Verifying token against {site_id}...", file=sys.stderr)
+        try:
+            user = verify_token(site_id, tok)
+        except Exception as e:
+            fail(f"failed to verify token: {e}")
+        p = save_token(tok)
+        email = user.get("email") or "unknown"
+        uid = user.get("id") or "unknown"
+        print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
+        print(f"✓ Saved token to {p} (mode 0600)")
+        return
+
+    # 2. Direct credentials provided via flags
+    if args.email and args.password:
+        print(f"Authenticating with {site_id}...", file=sys.stderr)
+        try:
+            tok, user = login_with_credentials(site_id, args.email, args.password)
+        except Exception as e:
+            fail(f"login failed: {e}")
+        p = save_token(tok)
+        email = user.get("email") or args.email
+        uid = user.get("id") or "unknown"
+        print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
+        print(f"✓ Saved token to {p} (mode 0600)")
+        return
+
+    # 3. Interactive wizard
+    if not sys.stdin.isatty():
+        fail(
+            "interactive login requires a TTY. Use --token <KEY> or --email <EMAIL> --password <PASSWORD>."
+        )
+
+    proj = project_id(site_id)
+    prof = profile_url(site_id)
+    reg = registration_url(site_id)
+
+    print()
+    print(f"VEuPathDB Authentication ({proj})")
+    print("─" * 60)
+    print("Choose how you would like to authenticate:")
+    print("  [1] Log in with VEuPathDB email & password")
+    print("  [2] Paste API key from browser (User menu -> My Account -> Service Access)")
+    print("  [3] Register a new account (opens registration link)")
+    print("  [q] Quit")
+    print()
+
+    try:
+        choice = input("Choice [1]: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        sys.exit(1)
+
+    if choice in ("q", "quit", "exit"):
+        sys.exit(0)
+    elif choice == "2":
+        print()
+        print(f"Open your profile: {prof}")
+        print("Copy your API key from the 'Service Access' tab.")
+        try:
+            tok = getpass.getpass("Paste API key (typing hidden): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            sys.exit(1)
+        if not tok:
+            fail("no API key provided")
+        print(f"Verifying token against {site_id}...", file=sys.stderr)
+        try:
+            user = verify_token(site_id, tok)
+        except Exception as e:
+            fail(f"invalid API key: {e}")
+        p = save_token(tok)
+        email = user.get("email") or "unknown"
+        uid = user.get("id") or "unknown"
+        print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
+        print(f"✓ Saved token to {p} (mode 0600)")
+    elif choice == "3":
+        print()
+        print(f"Register for free at: {reg}")
+        print("After registering, return here and run 'wdk.py login' again.")
+        sys.exit(0)
+    else:  # default option 1
+        print()
+        try:
+            email = input("VEuPathDB email: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            sys.exit(1)
+        if not email:
+            fail("email is required")
+        try:
+            password = getpass.getpass("VEuPathDB password (typing hidden): ")
+        except (KeyboardInterrupt, EOFError):
+            print()
+            sys.exit(1)
+        if not password:
+            fail("password is required")
+        print(f"Logging in to {site_id}...", file=sys.stderr)
+        try:
+            tok, user = login_with_credentials(site_id, email, password)
+        except Exception as e:
+            fail(f"login failed: {e}")
+        p = save_token(tok)
+        uid = user.get("id") or "unknown"
+        email_val = user.get("email") or email
+        print(f"✓ Authenticated: {email_val} (id={uid}) on {site_id}")
+        print(f"✓ Saved token to {p} (mode 0600)")
+
+
+def cmd_logout(args) -> None:
+    from _client import delete_token, token_path
+
+    p = token_path()
+    if delete_token():
+        print(f"✓ Logged out. Removed {p}")
+    else:
+        print(f"No stored token found at {p}")
+
+
+def cmd_detect_site(args) -> None:
+    detected = detect_site(args.query)
+    emit(
+        {
+            "query": args.query,
+            "site": detected,
+            "project": project_id(detected),
+            "service_url": service_url(detected),
+            "profile_url": profile_url(detected),
+            "registration_url": registration_url(detected),
+        }
+    )
+
 
 
 def cmd_record_types(args) -> None:
@@ -448,6 +637,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("whoami", help="verify token; print numeric user id")
     sp.add_argument("site")
     sp.set_defaults(func=cmd_whoami)
+
+    sp = sub.add_parser("login", help="authenticate and store token in ~/.config/veupathdb/token")
+    sp.add_argument("site", nargs="?", default=None, help="target site (default: prompt or veupathdb)")
+    sp.add_argument("--token", help="paste API key directly without interactive prompt")
+    sp.add_argument("--email", help="VEuPathDB account email")
+    sp.add_argument("--password", help="VEuPathDB account password")
+    sp.set_defaults(func=cmd_login)
+
+    sp = sub.add_parser("logout", help="remove stored token from ~/.config/veupathdb/token")
+    sp.set_defaults(func=cmd_logout)
+
+    sp = sub.add_parser("detect-site", help="detect VEuPathDB site from query text")
+    sp.add_argument("query", help="natural language text or question")
+    sp.set_defaults(func=cmd_detect_site)
 
     sp = sub.add_parser("record-types", help="list record type url segments")
     sp.add_argument("site")
