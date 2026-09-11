@@ -10,31 +10,56 @@ directory). Machine-readable JSON on stdout; errors on stderr with exit 1.
 `--help` on any subcommand. Supply-chain note: uv installs are expected to be
 date-pinned via `exclude-newer` in `~/.config/uv/uv.toml`.
 
-## Auth (required for nearly everything)
+## Auth & User Onboarding (required for nearly everything)
 
-Stored at `~/.config/veupathdb/token` (mode 0600) or via `VEUPATHDB_BEARER_TOKEN` env var.
-Must be a REGISTERED user's token — WDK silently mints guests otherwise.
+All WDK programmatic endpoints require authentication with a registered VEuPathDB account.
+Tokens are stored globally at `~/.config/veupathdb/token` (mode 0600) or via the
+`VEUPATHDB_BEARER_TOKEN` env var. Unauthenticated requests silently mint guests,
+which are rejected with 401 errors.
 
-Verify first:
+Verify authentication first:
 
     uv run scripts/wdk.py whoami plasmodb
 
-If not authenticated or on first use, log in:
+### Guiding unauthenticated or unregistered users
 
-    # Option A: Login with VEuPathDB email and password (interactive or scriptable)
-    uv run scripts/wdk.py login [site]
-    # or: uv run scripts/wdk.py login [site] --email <EMAIL> --password <PASSWORD>
+When starting a session or whenever `whoami` fails, guide the user through onboarding:
 
-    # Option B: Use browser API key (User icon -> My Account -> Service Access tab)
-    uv run scripts/wdk.py login [site] --token <PASTED_KEY>
+1. **Detect the community site** from the user's research question:
+   ```bash
+   uv run scripts/wdk.py detect-site "User's research question or organism"
+   ```
+   This returns the site ID (e.g. `plasmodb`, `toxodb`, `vectorbase`), along with the
+   community-specific `profile_url` and `registration_url`.
 
-    # Detect site from user's research question:
-    uv run scripts/wdk.py detect-site "Toxoplasma gondii rhoptry kinase"
+2. **Guide the user based on their account status**:
+   - **For UNREGISTERED users (no account yet)**:
+     - Direct them to the community registration page: `<registration_url>` (e.g. `https://plasmodb.org/plasmo/app/user/registration`).
+     - Explain that registration is **free**, takes **under 1 minute**, requires no waiting period, and provides **Single Sign-On across all 14 VEuPathDB sites**.
+     - Ask them to return once registered to complete login.
+   - **For REGISTERED users (already have an account)**:
+     - Offer the choice of two login methods:
+       - **Method 1 (Direct login)**: The user provides their VEuPathDB account email and password, then run:
+         ```bash
+         uv run scripts/wdk.py login <site> --email <EMAIL> --password <PASSWORD>
+         ```
+       - **Method 2 (Browser API key — no password shared with assistant)**:
+         If the user prefers not to share credentials, direct them to open `<profile_url>` in their browser (User icon in top header → **My Account** → **Service Access** tab), copy their API key, and provide it or run:
+         ```bash
+         uv run scripts/wdk.py login <site> --token <PASTED_KEY>
+         ```
+   - **Interactive CLI wizard**: The user can also run the interactive wizard in their terminal:
+     ```bash
+     uv run scripts/wdk.py login [site]
+     ```
 
-    # Log out:
-    uv run scripts/wdk.py logout
+3. **Verify**:
+   ```bash
+   uv run scripts/wdk.py whoami <site>
+   ```
 
-Details and authentication guide: references/auth.md
+To log out and remove the stored token: `uv run scripts/wdk.py logout`.
+Full details and technical background: references/auth.md
 
 ## Resolving gene symbols & names (don't web-search or use external APIs first!)
 
@@ -57,7 +82,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 
 ## The workflow
 
-1. **Pick the site**: `sites` lists all 14 (plasmodb, vectorbase, toxodb, …).
+1. **Check auth & pick the site**: Verify with `whoami`. If unauthenticated, follow the onboarding flow above (`detect-site`, guide registration or login). Otherwise resolve the site with `detect-site "QUERY"` or list all 14 with `sites`.
 2. **Discover searches** — dispatch a SUB-AGENT (keeps your context clean):
    its prompt = the research goal + "run `uv run scripts/wdk.py catalog SITE`,
    read every line, return 3–8 candidate searches (name, record type, why),
