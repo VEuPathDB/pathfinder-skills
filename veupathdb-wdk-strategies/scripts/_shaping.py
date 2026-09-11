@@ -434,7 +434,7 @@ def run_report(client, rt, search, wire_params, num_records=1, attributes=None):
     return client.post(f"/record-types/{rt}/searches/{search}/reports/standard", body)
 
 
-def shape_record_type(raw, query=None):
+def shape_record_type(raw, query=None, name_only=False, exclude=None):
     rt_name = raw.get("urlSegment") or raw.get("name")
     display_name = raw.get("displayName", "")
     pk = raw.get("primaryKeyColumnRefs", [])
@@ -444,26 +444,55 @@ def shape_record_type(raw, query=None):
 
     q = query.lower() if query else None
 
+    exclude_patterns = []
+    if exclude:
+        if isinstance(exclude, str):
+            exclude_patterns = [p.strip().lower() for p in exclude.split(",") if p.strip()]
+        elif isinstance(exclude, (list, tuple)):
+            exclude_patterns = [str(p).strip().lower() for p in exclude if str(p).strip()]
+
     attrs = []
     for a in raw_attrs:
         name = a.get("name", "")
         disp = a.get("displayName", "")
         dtype = a.get("columnDataType", "STRING")
-        if q is None or q in name.lower() or q in disp.lower():
-            attrs.append({"name": name, "displayName": disp, "type": dtype})
+        name_l = name.lower()
+        disp_l = disp.lower()
+
+        if exclude_patterns and any(p in name_l or p in disp_l for p in exclude_patterns):
+            continue
+
+        if q is not None:
+            if name_only:
+                if q not in name_l:
+                    continue
+            else:
+                if q not in name_l and q not in disp_l:
+                    continue
+
+        attrs.append({"name": name, "displayName": disp, "type": dtype})
 
     tables = []
     for t in raw_tables:
         name = t.get("name", "")
         disp = t.get("displayName", "")
         cols = [c.get("name", "") for c in t.get("attributes", [])]
-        if (
-            q is None
-            or q in name.lower()
-            or q in disp.lower()
-            or any(q in c.lower() for c in cols)
-        ):
-            tables.append({"name": name, "displayName": disp, "columns": cols})
+        name_l = name.lower()
+        disp_l = disp.lower()
+        cols_l = [c.lower() for c in cols]
+
+        if exclude_patterns and any(p in name_l or p in disp_l for p in exclude_patterns):
+            continue
+
+        if q is not None:
+            if name_only:
+                if q not in name_l and not any(q in c for c in cols_l):
+                    continue
+            else:
+                if q not in name_l and q not in disp_l and not any(q in c for c in cols_l):
+                    continue
+
+        tables.append({"name": name, "displayName": disp, "columns": cols})
 
     out = {
         "record_type": rt_name,
@@ -473,11 +502,25 @@ def shape_record_type(raw, query=None):
         "total_tables": len(raw_tables),
     }
 
-    if q:
-        out["filter"] = query
+    if q or exclude_patterns or name_only:
+        if q:
+            out["filter"] = query
+        if name_only:
+            out["name_only"] = True
+        if exclude_patterns:
+            out["exclude"] = exclude_patterns if len(exclude_patterns) > 1 else exclude_patterns[0]
         out["matching_attributes"] = len(attrs)
         out["matching_tables"] = len(tables)
-        out["attributes"] = attrs
+        if q:
+            out["attributes"] = attrs
+        else:
+            if len(attrs) > 60:
+                out["attributes"] = attrs[:50]
+                out["attributes_note"] = (
+                    f"showing first 50 of {len(attrs)} attributes; use --filter to filter further"
+                )
+            else:
+                out["attributes"] = attrs
         out["tables"] = tables
     else:
         if len(attrs) > 60:

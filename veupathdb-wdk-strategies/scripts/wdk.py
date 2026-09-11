@@ -142,7 +142,14 @@ def cmd_inspect_record_type(args) -> None:
     c = client(args.site)
     raw = fetch_record_type(c, args.record_type, refresh=args.refresh)
     f = getattr(args, "filter", None) or getattr(args, "query", None)
-    emit(shape_record_type(raw, query=f))
+    emit(
+        shape_record_type(
+            raw,
+            query=f,
+            name_only=getattr(args, "name_only", False),
+            exclude=getattr(args, "exclude", None),
+        )
+    )
 
 
 def _parse_kv(pairs):
@@ -220,13 +227,13 @@ def _prepared(args):
         wire = encode_params(detail, params)
     except ParamError as e:
         fail(str(e))
-    return c, rt, wire
+    return c, rt, wire, detail
 
 
 def cmd_count(args) -> None:
     from _shaping import extract_count, run_report
 
-    c, rt, wire = _prepared(args)
+    c, rt, wire, _ = _prepared(args)
     resp = run_report(c, rt, args.search, wire, num_records=1)
     count, field = extract_count(resp.get("meta", {}))
     emit(
@@ -250,8 +257,11 @@ def cmd_count(args) -> None:
 def cmd_preview(args) -> None:
     from _shaping import run_report, shape_records
 
-    c, rt, wire = _prepared(args)
-    attrs = args.attributes.split(",") if args.attributes else None
+    c, rt, wire, detail = _prepared(args)
+    if args.attributes:
+        attrs = [a.strip() for a in args.attributes.split(",") if a.strip()]
+    else:
+        attrs = detail.get("defaultAttributes")
     emit(
         shape_records(
             run_report(c, rt, args.search, wire, num_records=args.limit, attributes=attrs)
@@ -311,13 +321,31 @@ def cmd_delete_strategy(args) -> None:
 
 
 def cmd_results(args) -> None:
-    from _shaping import shape_records
+    from _shaping import get_search_detail, shape_records
 
     c = client(args.site)
     uid = c.user_id()
-    body = {"reportConfig": {"pagination": {"offset": 0, "numRecords": args.limit}}}
     if args.attributes:
-        body["reportConfig"]["attributes"] = args.attributes.split(",")
+        attrs = [a.strip() for a in args.attributes.split(",") if a.strip()]
+    else:
+        attrs = ["primary_key"]
+        try:
+            step = c.get(f"/users/{uid}/steps/{args.step}")
+            rt = step.get("recordClassName")
+            search_name = step.get("searchName")
+            if rt and search_name:
+                detail = get_search_detail(c, rt, search_name)
+                da = detail.get("defaultAttributes")
+                if da:
+                    attrs = da
+        except Exception:
+            pass
+    body = {
+        "reportConfig": {
+            "pagination": {"offset": 0, "numRecords": args.limit},
+            "attributes": attrs,
+        }
+    }
     emit(shape_records(c.post(f"/users/{uid}/steps/{args.step}/reports/standard", body)))
 
 
@@ -487,6 +515,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--query",
         dest="filter",
         help="filter attributes and tables by keyword",
+    )
+    sp.add_argument(
+        "--name-only",
+        action="store_true",
+        help="only match filter keyword against attribute/table name, not displayName",
+    )
+    sp.add_argument(
+        "--exclude",
+        metavar="PATTERN",
+        help="exclude attributes/tables matching pattern (substring or comma-separated, e.g. 'pan_')",
     )
     sp.add_argument(
         "--refresh", action="store_true", help="bypass 7-day disk cache"

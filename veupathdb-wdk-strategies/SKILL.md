@@ -75,18 +75,18 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 | sites | list site ids and service URLs |
 | whoami SITE | verify token, print numeric user id |
 | record-types SITE | list record type segments |
-| inspect-record-type SITE RT [--filter Q] | record schema: PK, attributes, tables |
+| inspect-record-type SITE RT [--filter Q] [--name-only] [--exclude P] | record schema: PK, attributes, tables |
 | searches SITE RT | searches for one record type (TSV) |
 | catalog SITE [--record-type RT] [--refresh] | full compact catalog (TSV) — discovery input |
 | find-searches SITE QUERY | lexical convenience lookup |
 | inspect-search SITE SEARCH [--filter HINT] | parameter sheet (alias: inspect) |
 | param-options SITE SEARCH PARAM [--filter Q] [--context P=V] | browse a vocabulary |
 | count SITE SEARCH --params JSON | count without creating anything |
-| preview SITE SEARCH --params JSON [--limit N] | sample records, no writes |
+| preview SITE SEARCH --params JSON [--limit N] [--attributes A] | sample records with search's default attributes (or custom) |
 | create-strategy SITE --spec JSON [--name S] | steps + strategy, returns URL |
 | strategy SITE ID / list-strategies SITE | read back |
 | delete-strategy SITE ID --yes | destructive |
-| results SITE --step ID | records for a step |
+| results SITE --step ID [--limit N] [--attributes A] | records for a step (defaults to search's standard attributes) |
 | download-url SITE --step ID | temporary download URL |
 | fetch-record SITE [ID] [--tables T] [--filter F] | record details/tables with row filtering |
 
@@ -105,6 +105,16 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
   databases often use different coordinate systems or outdated gene builds.
 - **Differential expression (EDA) searches are excluded**: Searches with `eda_` params
   require interactive web-app analysis and are hidden from `catalog`/`find-searches`.
+- **`inspect-record-type` and Protocol Application Nodes (`pan_`)**: Transcript records
+  contain thousands of legacy GUS Protocol Application Node columns (`pan_<id>_ns_<id>`)
+  and web graph widgets (`_expr_graph`). When querying schema, use `--name-only` to filter
+  specifically on attribute names (avoiding false positives from long descriptions) or
+  `--exclude pan_` / `--exclude "pan_,graph"` to suppress them.
+- **Automatic default attributes for `preview` and `results`**: When `--attributes` is
+  omitted, both `preview` and `results` dynamically look up and return the search's
+  standard default columns (`defaultAttributes`, e.g. `gene_product`, `organism`,
+  `primary_key`), exactly matching the website results table. Specify `--attributes` only
+  when requesting custom non-default attributes.
 
 ## Deeper reference (read on demand)
 

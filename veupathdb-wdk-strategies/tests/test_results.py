@@ -54,3 +54,27 @@ def test_live_download_url(live_client, live_step):
         idempotent=False,
     )
     assert resp.get("id"), f"unexpected temporary-results response: {resp!r}"
+
+
+def test_live_step_records_with_default_attributes(live_client, live_step):
+    from _shaping import get_search_detail, shape_records
+
+    uid = live_client.user_id()
+    step = live_client.get(f"/users/{uid}/steps/{live_step}")
+    rt = step.get("recordClassName")
+    search_name = step.get("searchName")
+    detail = get_search_detail(live_client, rt, search_name)
+    da = detail.get("defaultAttributes")
+    assert da is not None
+    assert "primary_key" in da
+    assert "gene_product" in da
+
+    resp = live_client.post(
+        f"/users/{uid}/steps/{live_step}/reports/standard",
+        {"reportConfig": {"pagination": {"offset": 0, "numRecords": 2}, "attributes": da}},
+    )
+    shaped = shape_records(resp)
+    assert len(shaped["records"]) == 2
+    assert "gene_product" in shaped["records"][0]["attributes"]
+    assert "primary_key" in shaped["records"][0]["attributes"]
+

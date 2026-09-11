@@ -39,5 +39,8 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | STR-4 | test_strategy.py::test_live_strategy_with_dependent_params | 1 step, estimated_size ~1753, url valid | range | 1753 | 2026-09-10 |
 | PROMPT-1 | "How many exons does the longest transcript of Anopheles gambiae gene PGPRLB have?" | VectorBase, gene AGAP001212, longest transcript exon count: 3 | exact | site=VectorBase, gene=AGAP001212, exon_count=3 | 2026-09-10 |
 | PROMPT-2 | "What is the Anopheles albimanus ortholog of Anopheles gambiae LRIM1 (AGAP006348)?" | VectorBase, gene AGAP006348, Orthologs table filtered to Anopheles albimanus (AALB20_030456 / AALB005865) | exact | site=VectorBase, gene=AGAP006348, orthologs=[AALB20_030456, AALB005865] | 2026-09-10 |
+| INS-6 | `wdk.py inspect-record-type vectorbase transcript --filter product --name-only --exclude graph` / test_record.py::test_live_inspect_record_type_name_only_and_exclude | returns only gene_product and transcript_product (name-only matching + graph exclusion) | fields-present | matching_attributes=2 | 2026-09-11 |
+| INS-7 | `wdk.py inspect-record-type vectorbase transcript --exclude pan_` / test_record.py::test_live_inspect_record_type_name_only_and_exclude | excludes all Protocol Application Node columns | fields-present | 0 pan_ attributes in output | 2026-09-11 |
+| RES-2 | `wdk.py results plasmodb --step <step_id> --limit 2` / test_results.py::test_live_step_records_with_default_attributes | returns records populated with search's defaultAttributes without passing --attributes | fields-present | attributes contains primary_key, gene_product | 2026-09-11 |
 
 

@@ -126,3 +126,80 @@ def test_live_fetch_record_filter_attributes(token):
     shaped = shape_record(raw, filter_query="exon")
     assert shaped["attributes"] == {"exon_count": "3"}
 
+
+def test_shape_record_type_name_only_offline():
+    from _shaping import shape_record_type
+
+    raw = {
+        "name": "transcript",
+        "displayName": "Transcript",
+        "primaryKeyColumnRefs": ["source_id"],
+        "attributes": [
+            {"name": "gene_product", "displayName": "Product Description"},
+            {"name": "pan_123_ns_456", "displayName": "Male reproductive organs expression"},
+            {"name": "organism", "displayName": "Organism"},
+        ],
+        "tables": [],
+    }
+    # Without name_only, "product" matches both gene_product and the "reproductive" display name
+    shaped_broad = shape_record_type(raw, query="product", name_only=False)
+    assert shaped_broad["matching_attributes"] == 2
+
+    # With name_only, "product" matches ONLY gene_product
+    shaped_strict = shape_record_type(raw, query="product", name_only=True)
+    assert shaped_strict["matching_attributes"] == 1
+    assert shaped_strict["attributes"][0]["name"] == "gene_product"
+    assert shaped_strict["name_only"] is True
+
+
+def test_shape_record_type_exclude_offline():
+    from _shaping import shape_record_type
+
+    raw = {
+        "name": "transcript",
+        "displayName": "Transcript",
+        "primaryKeyColumnRefs": ["source_id"],
+        "attributes": [
+            {"name": "primary_key", "displayName": "Gene ID"},
+            {"name": "gene_product", "displayName": "Product Description"},
+            {"name": "pan_123_ns_456", "displayName": "Sample 123"},
+            {"name": "aaeg_expr_graph", "displayName": "Expression Graph"},
+        ],
+        "tables": [
+            {"name": "TableA", "displayName": "Table A", "attributes": []},
+            {"name": "pan_table", "displayName": "PAN Table", "attributes": []},
+        ],
+    }
+    # Exclude pan_
+    shaped = shape_record_type(raw, exclude="pan_")
+    assert shaped["matching_attributes"] == 3
+    assert not any("pan_" in a["name"] for a in shaped["attributes"])
+    assert len(shaped["tables"]) == 1
+    assert shaped["tables"][0]["name"] == "TableA"
+
+    # Exclude multiple patterns: "pan_,_graph"
+    shaped_multi = shape_record_type(raw, exclude="pan_,_graph")
+    assert shaped_multi["matching_attributes"] == 2
+    assert [a["name"] for a in shaped_multi["attributes"]] == ["primary_key", "gene_product"]
+
+
+def test_live_inspect_record_type_name_only_and_exclude(token):
+    from _client import fetch_record_type
+    from _shaping import shape_record_type
+
+    c = Client("vectorbase", token=token)
+    raw = fetch_record_type(c, "transcript")
+
+    # Name-only filter on "product" excluding "graph"
+    shaped = shape_record_type(raw, query="product", name_only=True, exclude="graph")
+    names = [a["name"] for a in shaped["attributes"]]
+    assert "gene_product" in names
+    assert "transcript_product" in names
+    assert not any("graph" in n for n in names)
+    assert shaped["matching_attributes"] <= 5
+
+    # Exclude pan_ attributes
+    shaped_no_pan = shape_record_type(raw, exclude="pan_")
+    assert shaped_no_pan["matching_attributes"] < shaped_no_pan["total_attributes"]
+    assert not any(a["name"].startswith("pan_") for a in shaped_no_pan["attributes"])
+
