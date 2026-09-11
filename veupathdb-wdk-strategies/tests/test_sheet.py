@@ -48,6 +48,8 @@ def test_sheet_mw():
     assert "vocabulary_tree" in org
     assert len(org["vocabulary_tree"]) <= 80
     assert "children" in org["note"]
+    assert org["default"] is None
+    assert sheet["params_template"]["organism"] is None
     assert sheet["params_template"]["min_molecular_weight"] == "10000"
 
 

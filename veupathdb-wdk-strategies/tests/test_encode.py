@@ -72,3 +72,25 @@ def test_extract_count_precedence_and_unmeasured():
     )
     assert extract_count({"totalCount": 9}) == (9, "totalCount")
     assert extract_count({}) == (None, None)
+
+
+def test_missing_required_multipick_raises_param_error():
+    from _shaping import ParamError, encode_params
+
+    with pytest.raises(ParamError) as exc_info:
+        encode_params(_mw(), {})
+    msg = str(exc_info.value)
+    assert "required parameter(s) with no value and no default: ['organism']" in msg
+    assert "requires at least 1 selection" in msg
+    assert "param-options" in msg
+
+
+def test_empty_required_multipick_raises_param_error():
+    from _shaping import ParamError, encode_params
+
+    with pytest.raises(ParamError) as exc_info:
+        encode_params(_mw(), {"organism": []})
+    msg = str(exc_info.value)
+    assert "parameter 'organism' cannot be empty" in msg
+    assert "requires at least 1 selection" in msg
+    assert "param-options" in msg

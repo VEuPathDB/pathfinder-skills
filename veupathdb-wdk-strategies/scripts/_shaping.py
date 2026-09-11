@@ -227,6 +227,35 @@ def _vocab_entry(p, query):
     return out
 
 
+def _as_list(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value.strip().startswith("["):
+        return json.loads(value)
+    return [value]
+
+
+def _effective_default(p):
+    """Return the usable default value for a parameter, or None if the parameter
+    has no usable default (e.g. multi-pick with empty initialDisplayValue '[]'
+    where an empty selection is not allowed)."""
+    raw = p.get("initialDisplayValue")
+    if raw is None:
+        return None
+    ptype = p.get("type")
+    min_count = p.get("minSelectedCount")
+    if min_count is None and not p.get("allowEmptyValue", False):
+        min_count = 1
+    if ptype == "multi-pick-vocabulary":
+        items = _as_list(raw)
+        if not items and min_count and min_count > 0:
+            return None
+        return raw
+    if not p.get("allowEmptyValue", False) and str(raw).strip() == "":
+        return None
+    return raw
+
+
 def build_sheet(search_data, query=None):
     params = search_data.get("parameters", [])
     visible = [p for p in params if p.get("isVisible", True)]
@@ -234,12 +263,13 @@ def build_sheet(search_data, query=None):
     visible_names = {p["name"] for p in visible}
     entries, deps, template = [], [], {}
     for p in visible:
+        eff_default = _effective_default(p)
         e = {
             "name": p["name"],
             "type": p["type"],
             "displayName": p.get("displayName", ""),
             "required": not p.get("allowEmptyValue", False),
-            "default": p.get("initialDisplayValue"),
+            "default": eff_default,
         }
         help_text = strip_html(p.get("help") or "")
         if help_text:
@@ -249,7 +279,7 @@ def build_sheet(search_data, query=None):
         if p["type"] == "input-step":
             e["note"] = "wired via stepTree; submitted as empty string"
         entries.append(e)
-        template[p["name"]] = p.get("initialDisplayValue")
+        template[p["name"]] = eff_default
         for dep in p.get("dependentParams", []):
             if dep in visible_names:
                 deps.append(
@@ -320,14 +350,6 @@ COUNT_FIELDS = (
 )
 
 
-def _as_list(value):
-    if isinstance(value, list):
-        return value
-    if isinstance(value, str) and value.strip().startswith("["):
-        return json.loads(value)
-    return [value]
-
-
 def encode_params(search_data, user_params):
     params = search_data.get("parameters", [])
     by_name = {p["name"]: p for p in params}
@@ -348,7 +370,7 @@ def encode_params(search_data, user_params):
             wire[name] = ""
             continue
         supplied = name in user_params and user_params[name] is not None
-        value = user_params[name] if supplied else p.get("initialDisplayValue")
+        value = user_params[name] if supplied else _effective_default(p)
         if value is None:
             if not p.get("allowEmptyValue", False) and p.get("isVisible", True):
                 missing.append(name)
@@ -357,6 +379,15 @@ def encode_params(search_data, user_params):
         vocab = p.get("vocabulary")
         if ptype == "multi-pick-vocabulary":
             items = [str(i) for i in _as_list(value)]
+            min_count = p.get("minSelectedCount")
+            if min_count is None and not p.get("allowEmptyValue", False):
+                min_count = 1
+            if not items and min_count and min_count > 0:
+                search_name = search_data.get("urlSegment", "")
+                raise ParamError(
+                    f"parameter '{name}' cannot be empty (requires at least {min_count} selection(s); "
+                    f"browse options with: uv run scripts/wdk.py param-options <site> {search_name} {name})"
+                )
             if is_tree(vocab):
                 leaves, bad = expand_to_leaves(vocab, items)
                 if bad:
@@ -393,9 +424,19 @@ def encode_params(search_data, user_params):
                 )
             wire[name] = sval
     if missing:
-        raise ParamError(
-            f"required parameter(s) with no value and no default: {missing}"
-        )
+        hints = []
+        search_name = search_data.get("urlSegment", "")
+        for m in missing:
+            p_obj = next((x for x in params if x["name"] == m), None)
+            if p_obj and p_obj.get("type") == "multi-pick-vocabulary":
+                hints.append(
+                    f"'{m}' requires at least 1 selection; browse options with: "
+                    f"uv run scripts/wdk.py param-options <site> {search_name} {m}"
+                )
+        msg = f"required parameter(s) with no value and no default: {missing}"
+        if hints:
+            msg += f" ({'; '.join(hints)})"
+        raise ParamError(msg)
     return wire
 
 

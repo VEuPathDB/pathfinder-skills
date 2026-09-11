@@ -71,10 +71,12 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 - **Resolve with `GenesByText` preview first**:
   ```bash
   uv run scripts/wdk.py preview SITE GenesByText \
-    --params '{"text_expression": "SYMBOL", "text_search_organism": ["Organism"]}' \
+    --params '{"text_expression": "SYMBOL", "text_search_organism": ["Organism"], "text_fields": ["name", "Alias"]}' \
     --attributes primary_key,gene_name,gene_product
   ```
-  Tip: to match symbols specifically, add `"text_fields": ["name", "Alias"]` to `--params`.
+  - **`text_search_organism` is MANDATORY**: WDK has no default organism for `GenesByText` and rejects empty selections. Always specify the organism or species complex (e.g. `["Anopheles gambiae"]`, `["Plasmodium falciparum 3D7"]`). Tree parents auto-expand to all member strains.
+  - To look up the exact organism name: `uv run scripts/wdk.py param-options SITE GenesByText text_search_organism --filter "organism"`
+  - Matching symbols specifically: use `"text_fields": ["name", "Alias"]` (as shown above).
 - **When is WebSearch acceptable?** ONLY as a fallback if VEuPathDB text search
   returns 0 hits, specifically to discover published nomenclature/hyphenation
   variants (e.g. `SRPN-2` vs `SRPN2`) or synonym aliases. Once a synonym is

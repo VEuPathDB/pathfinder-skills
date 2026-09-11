@@ -34,3 +34,7 @@ there (docs/knowledge/wdk/rules). The CLI guards the starred ones.
 14. A count of 0 after AND-ing many criteria usually means over-narrowing —
     prefer few broad criteria, verify each leaf's count > 0 before combining
     (use `count` per leaf; they're anonymous and parallelizable).
+15. ★ Empty initialDisplayValue ('[]') on required multi-pick params: WDK uses
+    "[]" as the unselected initial display value for params like `text_search_organism`
+    and `organism`, but requires at least 1 selection. `encode_params` enforces
+    this locally instead of sending an empty list that triggers HTTP 422.

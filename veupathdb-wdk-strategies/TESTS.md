@@ -46,5 +46,6 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | AUTH-4 | `wdk.py whoami <site>` (unauthenticated) / test_client.py::test_cli_whoami_unauthenticated | actionable onboarding error message with site-specific login/profile/registration links | fields-present | contains login, profile, registration URLs | 2026-09-11 |
 | AUTH-5 | `login_with_credentials(site, email, pass)` / test_client.py::test_login_with_credentials_success | authenticates via POST /login, extracts cookie token, verifies user | exact (offline) | status=200, uid=555 | 2026-09-11 |
 | SITE-1 | `wdk.py detect-site "<query>"` / test_client.py::test_cli_detect_site & test_sites.py::test_detect_site_from_queries | maps organism/pathogen/vector keywords to community site (toxodb, vectorbase, etc.) with veupathdb fallback | exact | community site id + URLs | 2026-09-11 |
+| ENC-1 | `encode_params(_mw(), {})` & `encode_params(_mw(), {"organism": []})` / test_encode.py::test_missing_required_multipick_raises_param_error | catches unselected/empty required multi-pick parameters locally; instructs param-options | exact (offline) | ParamError naming parameter and options | 2026-09-11 |
 
 
