@@ -105,6 +105,8 @@ def cmd_login(args) -> None:
     # 1. Direct token provided via flag
     if args.token:
         tok = args.token.strip()
+        if tok == "-":
+            tok = sys.stdin.read().strip()
         print(f"Verifying token against {site_id}...", file=sys.stderr)
         try:
             user = verify_token(site_id, tok)
@@ -119,9 +121,12 @@ def cmd_login(args) -> None:
 
     # 2. Direct credentials provided via flags
     if args.email and args.password:
+        password = args.password
+        if password == "-":
+            password = sys.stdin.read().strip()
         print(f"Authenticating with {site_id}...", file=sys.stderr)
         try:
-            tok, user = login_with_credentials(site_id, args.email, args.password)
+            tok, user = login_with_credentials(site_id, args.email, password)
         except Exception as e:
             fail(f"login failed: {e}")
         p = save_token(tok)

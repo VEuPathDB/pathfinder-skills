@@ -56,5 +56,9 @@ there (docs/knowledge/wdk/rules). The CLI guards the starred ones.
       across dozens of datasets (`all_samples`).
     - Use `--filter <keyword>` (e.g. `--filter gut`) or `--dataset <id>` only when drill-down
       into specific conditions or tissues is explicitly requested.
-
-
+18. ★ Probing ~/.config or env when `whoami` fails:
+    `whoami` is authoritative. It checks both `VEUPATHDB_BEARER_TOKEN` and `~/.config/veupathdb/token`.
+    If `whoami` fails, unauthenticated requests are guaranteed to fail with 401. Probing `~/.config`
+    or `env` triggers security approval dialogs in desktop environments (Antigravity Desktop) and
+    derails the user. Never probe config files or env vars; transition immediately to the onboarding
+    questionnaire and run the login command for the user.

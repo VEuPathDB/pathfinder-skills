@@ -21,9 +21,18 @@ Verify authentication first:
 
     uv run scripts/wdk.py whoami plasmodb
 
+> [!CRITICAL] **`whoami` is authoritative — DO NOT probe files or environment variables**
+> `whoami` automatically checks both `VEUPATHDB_BEARER_TOKEN` and `~/.config/veupathdb/token`.
+> If `whoami` exits with code 1 (unauthenticated, missing token, or GUEST user):
+> - **DO NOT** inspect `~/.config/veupathdb/token` (`ls`, `cat`, etc.).
+> - **DO NOT** search environment variables (`env`, `printenv`, `echo $...`).
+> - **DO NOT** attempt any WDK data commands (`preview`, `count`, `fetch-record`, `catalog`, `create-strategy`, etc.) — they will immediately fail with 401 errors.
+> Probing files and environment variables triggers alarming security permission dialogs in desktop environments (like Antigravity Desktop) and derails the user.
+> **STOP IMMEDIATELY** and initiate the guided onboarding questionnaire below.
+
 ### Guiding unauthenticated or unregistered users
 
-When starting a session or whenever `whoami` fails, guide the user through onboarding:
+**YOU (the assistant) do the work — never tell chat/desktop users to open a terminal or run bash commands!**
 
 1. **Detect the community site** from the user's research question:
    ```bash
@@ -32,31 +41,48 @@ When starting a session or whenever `whoami` fails, guide the user through onboa
    This returns the site ID (e.g. `plasmodb`, `toxodb`, `vectorbase`), along with the
    community-specific `profile_url` and `registration_url`.
 
-2. **Guide the user based on their account status**:
-   - **For UNREGISTERED users (no account yet)**:
-     - Direct them to the community registration page: `<registration_url>` (e.g. `https://plasmodb.org/plasmo/app/user/registration`).
-     - Explain that registration is **free**, takes **under 1 minute**, requires no waiting period, and provides **Single Sign-On across all 14 VEuPathDB sites**.
-     - Ask them to return once registered to complete login.
-   - **For REGISTERED users (already have an account)**:
-     - Offer the choice of two login methods:
-       - **Method 1 (Direct login)**: The user provides their VEuPathDB account email and password, then run:
-         ```bash
-         uv run scripts/wdk.py login <site> --email <EMAIL> --password <PASSWORD>
-         ```
-       - **Method 2 (Browser API key — no password shared with assistant)**:
-         If the user prefers not to share credentials, direct them to open `<profile_url>` in their browser (User icon in top header → **My Account** → **Service Access** tab), copy their API key, and provide it or run:
-         ```bash
-         uv run scripts/wdk.py login <site> --token <PASTED_KEY>
-         ```
-   - **Interactive CLI wizard**: The user can also run the interactive wizard in their terminal:
-     ```bash
-     uv run scripts/wdk.py login [site]
-     ```
+2. **Conduct the onboarding questionnaire**:
+   Present an interactive questionnaire to the user.
+   - **In Antigravity**: Use the `ask_question` tool:
+     - Question: `"VEuPathDB authentication is required to access <Project>. How would you like to proceed?"`
+     - Options:
+       - `"(Recommended) I have an account — I'll paste my browser API key (no password shared)"`
+       - `"I have an account — I'll provide my VEuPathDB email and password"`
+       - `"I don't have an account yet — I need to register"`
+   - **In Claude Code or other harnesses**: Use the harness questionnaire tool (e.g. `AskUserQuestion`) if available, or present the 3 options directly in your chat response and wait for the user's reply.
 
-3. **Verify**:
-   ```bash
-   uv run scripts/wdk.py whoami <site>
-   ```
+3. **Execute based on the user's response**:
+
+   - **Option A: User selects Browser API Key (Recommended)**:
+     - Provide the direct markdown link to their community Service Access page:
+       `[<Project> Service Access Tab](<profile_url>)`
+       *(User menu in top-right → **My Account** → **Service Access** tab)*.
+     - Instruct the user clearly:
+       "Please copy your API key from the page linked above, paste it into the chat message box below as your next reply, and send it."
+     - When the user sends their key in their next message, **YOU execute**:
+       ```bash
+       uv run scripts/wdk.py login <site> --token "<PASTED_KEY>"
+       ```
+       *(Note: `--token -` via stdin is also supported: `printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login <site> --token -`)*.
+     - Verify with `uv run scripts/wdk.py whoami <site>`.
+     - Confirm success and **immediately proceed with the user's original request**.
+
+   - **Option B: User selects Email & Password**:
+     - Instruct the user:
+       "Please send your VEuPathDB account email and password in the chat message box below as your next reply. (Tip: If you prefer not to share your account password in chat, you can paste your browser API key instead)."
+     - When provided in their reply, **YOU execute**:
+       ```bash
+       uv run scripts/wdk.py login <site> --email "<EMAIL>" --password "<PASSWORD>"
+       ```
+     - Verify with `uv run scripts/wdk.py whoami <site>`.
+     - Confirm success and **immediately proceed with the user's original request**.
+
+   - **Option C: User selects Registration**:
+     - Provide the direct markdown link to the community registration page:
+       `[Register at <Project>](<registration_url>)`
+     - Explain that registration is **free**, takes **under 1 minute**, requires no waiting period, and provides **Single Sign-On across all 14 VEuPathDB sites**.
+     - Instruct the user:
+       "Once you have registered, reply in the chat message box below to let me know whether you'd like to log in with your API key or email/password, and I will complete the setup for you."
 
 To log out and remove the stored token: `uv run scripts/wdk.py logout`.
 Full details and technical background: references/auth.md
@@ -84,7 +110,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 
 ## The workflow
 
-1. **Check auth & pick the site**: Verify with `whoami`. If unauthenticated, follow the onboarding flow above (`detect-site`, guide registration or login). Otherwise resolve the site with `detect-site "QUERY"` or list all 14 with `sites`.
+1. **Check auth & pick the site**: Verify with `whoami`. If unauthenticated or GUEST, do NOT probe `~/.config` or `env`; immediately follow the onboarding questionnaire above (`detect-site`, conduct questionnaire, run login for the user). Otherwise resolve the site with `detect-site "QUERY"` or list all 14 with `sites`.
 2. **Discover searches** — dispatch a SUB-AGENT (keeps your context clean):
    its prompt = the research goal + "run `uv run scripts/wdk.py catalog SITE`,
    read every line, return 3–8 candidate searches (name, record type, why),
