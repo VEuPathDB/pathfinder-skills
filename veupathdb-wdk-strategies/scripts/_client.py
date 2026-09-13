@@ -108,65 +108,6 @@ def verify_token(site_id: str, token: str) -> dict:
     return user
 
 
-def login_with_credentials(
-    site_id: str, email: str, password: str, redirect_url: str | None = None
-) -> tuple[str, dict]:
-    """Authenticate against VEuPathDB with email and password.
-
-    Returns (token, user_dict).
-    Raises WDKError on failure.
-    """
-    site_url = service_url(site_id)
-    payload = {
-        "email": email.strip(),
-        "password": password,
-        "redirectUrl": redirect_url or site_url,
-    }
-    with httpx.Client(
-        base_url=site_url, timeout=SITES[site_id]["timeout"], follow_redirects=False
-    ) as http:
-        resp = http.post("/login", json=payload)
-
-    # 1. Extract Authorization cookie from Set-Cookie headers
-    token = None
-    for header in resp.headers.get_list("set-cookie"):
-        for part in header.split(";"):
-            part = part.strip()
-            if part.startswith("Authorization="):
-                token = part.split("=", 1)[1].strip('"')
-                break
-        if token:
-            break
-
-    if not token and "Authorization" in resp.cookies:
-        token = resp.cookies["Authorization"]
-
-    # 2. If token not found, inspect response for error message
-    if not token:
-        msg = "Invalid email or password"
-        if resp.status_code >= 400:
-            msg = f"Login failed (HTTP {resp.status_code}): {resp.text[:300]}"
-        else:
-            try:
-                data = resp.json()
-                if isinstance(data, dict):
-                    if data.get("message"):
-                        msg = data["message"]
-                    elif data.get("success") is False:
-                        msg = "Authentication failed: invalid username or password"
-            except Exception:
-                pass
-        raise WDKError(
-            msg,
-            status=resp.status_code if resp.status_code != 200 else 401,
-            endpoint="/login",
-        )
-
-    # 3. Verify token against /users/current
-    user = verify_token(site_id, token)
-    return token, user
-
-
 def _is_delayed(body):
     return isinstance(body, dict) and body.get("message") == "WDK-DELAYED-RESULT"
 

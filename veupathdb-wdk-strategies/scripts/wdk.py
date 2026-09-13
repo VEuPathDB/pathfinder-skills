@@ -58,9 +58,7 @@ def cmd_whoami(args) -> None:
         reg = registration_url(args.site)
         fail(
             f"not logged in. VEuPathDB authentication is required.\n\n"
-            f"To log in with your email and password:\n"
-            f"  uv run scripts/wdk.py login {args.site}\n\n"
-            f"Or to use your browser API key:\n"
+            f"To log in with your browser API key:\n"
             f"  1. Go to: {prof}\n"
             f"  2. Run:   uv run scripts/wdk.py login {args.site} --token <PASTED_KEY>\n\n"
             f"Need an account? Register at: {reg}"
@@ -77,7 +75,6 @@ def cmd_whoami(args) -> None:
 
 def cmd_login(args) -> None:
     from _client import (
-        login_with_credentials,
         save_token,
         token_path,
         verify_token,
@@ -85,7 +82,7 @@ def cmd_login(args) -> None:
 
     site_id = (args.site or "").strip().lower()
     if not site_id:
-        if args.token or (args.email and args.password):
+        if args.token:
             site_id = "veupathdb"
         elif sys.stdin.isatty():
             try:
@@ -119,28 +116,9 @@ def cmd_login(args) -> None:
         print(f"✓ Saved token to {p} (mode 0600)")
         return
 
-    # 2. Direct credentials provided via flags
-    if args.email and args.password:
-        password = args.password
-        if password == "-":
-            password = sys.stdin.read().strip()
-        print(f"Authenticating with {site_id}...", file=sys.stderr)
-        try:
-            tok, user = login_with_credentials(site_id, args.email, password)
-        except Exception as e:
-            fail(f"login failed: {e}")
-        p = save_token(tok)
-        email = user.get("email") or args.email
-        uid = user.get("id") or "unknown"
-        print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
-        print(f"✓ Saved token to {p} (mode 0600)")
-        return
-
-    # 3. Interactive wizard
+    # 2. Interactive wizard
     if not sys.stdin.isatty():
-        fail(
-            "interactive login requires a TTY. Use --token <KEY> or --email <EMAIL> --password <PASSWORD>."
-        )
+        fail("interactive login requires a TTY. Use --token <KEY> (or --token -).")
 
     proj = project_id(site_id)
     prof = profile_url(site_id)
@@ -150,9 +128,8 @@ def cmd_login(args) -> None:
     print(f"VEuPathDB Authentication ({proj})")
     print("─" * 60)
     print("Choose how you would like to authenticate:")
-    print("  [1] Log in with VEuPathDB email & password")
-    print("  [2] Paste API key from browser (User menu -> My Account -> Service Access)")
-    print("  [3] Register a new account (opens registration link)")
+    print("  [1] Paste API key from browser (User menu -> My Account -> Service Access)")
+    print("  [2] Register a new account (opens registration link)")
     print("  [q] Quit")
     print()
 
@@ -165,6 +142,11 @@ def cmd_login(args) -> None:
     if choice in ("q", "quit", "exit"):
         sys.exit(0)
     elif choice == "2":
+        print()
+        print(f"Register for free at: {reg}")
+        print("After registering, log in to your profile, copy your API key, and run 'wdk.py login --token <KEY>'.")
+        sys.exit(0)
+    else:  # default option 1
         print()
         print(f"Open your profile: {prof}")
         print("Copy your API key from the 'Service Access' tab.")
@@ -184,37 +166,6 @@ def cmd_login(args) -> None:
         email = user.get("email") or "unknown"
         uid = user.get("id") or "unknown"
         print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
-        print(f"✓ Saved token to {p} (mode 0600)")
-    elif choice == "3":
-        print()
-        print(f"Register for free at: {reg}")
-        print("After registering, return here and run 'wdk.py login' again.")
-        sys.exit(0)
-    else:  # default option 1
-        print()
-        try:
-            email = input("VEuPathDB email: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            print()
-            sys.exit(1)
-        if not email:
-            fail("email is required")
-        try:
-            password = getpass.getpass("VEuPathDB password (typing hidden): ")
-        except (KeyboardInterrupt, EOFError):
-            print()
-            sys.exit(1)
-        if not password:
-            fail("password is required")
-        print(f"Logging in to {site_id}...", file=sys.stderr)
-        try:
-            tok, user = login_with_credentials(site_id, email, password)
-        except Exception as e:
-            fail(f"login failed: {e}")
-        p = save_token(tok)
-        uid = user.get("id") or "unknown"
-        email_val = user.get("email") or email
-        print(f"✓ Authenticated: {email_val} (id={uid}) on {site_id}")
         print(f"✓ Saved token to {p} (mode 0600)")
 
 
@@ -697,9 +648,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("login", help="authenticate and store token in ~/.config/veupathdb/token")
     sp.add_argument("site", nargs="?", default=None, help="target site (default: prompt or veupathdb)")
-    sp.add_argument("--token", help="paste API key directly without interactive prompt")
-    sp.add_argument("--email", help="VEuPathDB account email")
-    sp.add_argument("--password", help="VEuPathDB account password")
+    sp.add_argument("--token", help="paste API key directly without interactive prompt (or '-' for stdin)")
     sp.set_defaults(func=cmd_login)
 
     sp = sub.add_parser("logout", help="remove stored token from ~/.config/veupathdb/token")

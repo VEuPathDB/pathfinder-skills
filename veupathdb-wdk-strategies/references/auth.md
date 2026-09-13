@@ -12,11 +12,13 @@ works on all of them.
 When an assistant runs this skill on behalf of a user:
 - Chat/desktop users should **never** be instructed to run bash commands or open terminals.
 - If `whoami` fails or reports GUEST, the assistant must **never** inspect `~/.config` or `env` (which triggers security approval popups), and must never attempt data queries.
-- Instead, the assistant presents an interactive questionnaire (via `ask_question` in Antigravity, `AskUserQuestion` in Claude Code, or markdown chat choices) offering Option 1, Option 2, or Option 3.
+- Instead, the assistant presents an interactive questionnaire (via `ask_question` in Antigravity, `AskUserQuestion` in Claude Code, or markdown chat choices) offering Option 1 or Option 2.
 - When the user provides their choice and input, the **assistant** runs the appropriate CLI login command and verifies with `whoami`.
 
-### Option 1: Browser API key (Recommended — no password shared with agent)
-Best practice for chat/assistant environments:
+> [!IMPORTANT] **Why password authentication is not supported**
+> Account passwords must **never** be collected in chat conversations or command-line parameters. In assistant environments (Antigravity, Claude Code, etc.), session transcripts are persisted to disk (e.g. `~/.gemini`, `~/.claude`) and may be group- or world-readable, and process arguments are visible in system process tables. Personal API keys obtained from the browser can be revoked and regenerated at any time from the account profile without endangering master account passwords.
+
+### Option 1: Browser API key
 1. Direct the user to open their community profile: `<profile_url>` (e.g. `https://plasmodb.org/plasmo/app/user/profile#serviceAccess`).
 2. The user copies their personal API key from the **Service Access** tab.
 3. The user pastes the key into the chat message box below as their next reply, and the agent executes:
@@ -24,17 +26,10 @@ Best practice for chat/assistant environments:
        uv run scripts/wdk.py login [site] --token <PASTED_KEY>
        # Or via stdin: printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login [site] --token -
 
-### Option 2: Direct login with email and password
-For users comfortable entering credentials:
-
-    uv run scripts/wdk.py login [site] --email user@example.org --password mypass
-
-Or interactively in a developer terminal: `uv run scripts/wdk.py login [site]`.
-
-### Option 3: Unregistered users
+### Option 2: Unregistered users
 If the user does not have an account, direct them to register for free:
 `https://veupathdb.org/veupathdb/app/user/registration` (or the component site's
-registration page). After registration, the agent guides them through Option 1 or 2.
+registration page). After registration, they open their profile's Service Access tab, copy their API key, and provide it via Option 1.
 
 ### Community / Site Detection
 To identify which community website a user's prompt pertains to:

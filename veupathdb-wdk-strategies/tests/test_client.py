@@ -166,52 +166,6 @@ def test_verify_token_guest_refused(monkeypatch):
         verify_token("plasmodb", "guest-token")
 
 
-def test_login_with_credentials_success(monkeypatch):
-    from _client import login_with_credentials
-
-    def handler(request):
-        if request.url.path.endswith("/login"):
-            data = json.loads(request.content)
-            assert data["email"] == "user@uni.edu"
-            assert data["password"] == "secret"
-            headers = [("Set-Cookie", "Authorization=new-login-token; Path=/; Max-Age=1000")]
-            return httpx.Response(200, headers=headers, json={"success": True})
-        elif request.url.path.endswith("/users/current"):
-            return httpx.Response(200, json={"id": 555, "email": "user@uni.edu", "isGuest": False})
-        return httpx.Response(404)
-
-    real_client = httpx.Client
-
-    def mock_client(*args, **kwargs):
-        kwargs["transport"] = httpx.MockTransport(handler)
-        return real_client(*args, **kwargs)
-
-    monkeypatch.setattr("httpx.Client", mock_client)
-
-    token, user = login_with_credentials("plasmodb", "user@uni.edu", "secret")
-    assert token == "new-login-token"
-    assert user["id"] == 555
-
-
-def test_login_with_credentials_failure(monkeypatch):
-    from _client import WDKError, login_with_credentials
-
-    def handler(request):
-        return httpx.Response(200, json={"success": False, "message": "Invalid username or password"})
-
-    real_client = httpx.Client
-
-    def mock_client(*args, **kwargs):
-        kwargs["transport"] = httpx.MockTransport(handler)
-        return real_client(*args, **kwargs)
-
-    monkeypatch.setattr("httpx.Client", mock_client)
-
-    with pytest.raises(WDKError) as exc:
-        login_with_credentials("plasmodb", "bad@uni.edu", "wrong")
-    assert "Invalid username or password" in str(exc.value)
-
-
 def test_cli_detect_site(capsys):
     import wdk
 

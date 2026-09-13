@@ -46,19 +46,18 @@ Verify authentication first:
    - **In Antigravity**: Use the `ask_question` tool:
      - Question: `"VEuPathDB authentication is required to access <Project>. How would you like to proceed?"`
      - Options:
-       - `"(Recommended) I have an account — I'll paste my browser API key (no password shared)"`
-       - `"I have an account — I'll provide my VEuPathDB email and password"`
+       - `"(Recommended) I have an account — I'll get my browser API key and paste it"`
        - `"I don't have an account yet — I need to register"`
-   - **In Claude Code or other harnesses**: Use the harness questionnaire tool (e.g. `AskUserQuestion`) if available, or present the 3 options directly in your chat response and wait for the user's reply.
+   - **In Claude Code or other harnesses**: Use the harness questionnaire tool (e.g. `AskUserQuestion`) if available, or present the 2 options directly in your chat response and wait for the user's reply.
 
 3. **Execute based on the user's response**:
 
-   - **Option A: User selects Browser API Key (Recommended)**:
+   - **Option A: User has an account (Browser API Key)**:
      - Provide the direct markdown link to their community Service Access page:
        `[<Project> Service Access Tab](<profile_url>)`
        *(User menu in top-right → **My Account** → **Service Access** tab)*.
      - Instruct the user clearly:
-       "Please copy your API key from the page linked above, paste it into the chat message box below as your next reply, and send it."
+       "Please log in to your account at the page linked above, copy your API key from the Service Access tab, paste it into the chat message box below as your next reply, and send it."
      - When the user sends their key in their next message, **YOU execute**:
        ```bash
        uv run scripts/wdk.py login <site> --token "<PASTED_KEY>"
@@ -67,22 +66,12 @@ Verify authentication first:
      - Verify with `uv run scripts/wdk.py whoami <site>`.
      - Confirm success and **immediately proceed with the user's original request**.
 
-   - **Option B: User selects Email & Password**:
-     - Instruct the user:
-       "Please send your VEuPathDB account email and password in the chat message box below as your next reply. (Tip: If you prefer not to share your account password in chat, you can paste your browser API key instead)."
-     - When provided in their reply, **YOU execute**:
-       ```bash
-       uv run scripts/wdk.py login <site> --email "<EMAIL>" --password "<PASSWORD>"
-       ```
-     - Verify with `uv run scripts/wdk.py whoami <site>`.
-     - Confirm success and **immediately proceed with the user's original request**.
-
-   - **Option C: User selects Registration**:
+   - **Option B: User needs to register**:
      - Provide the direct markdown link to the community registration page:
        `[Register at <Project>](<registration_url>)`
      - Explain that registration is **free**, takes **under 1 minute**, requires no waiting period, and provides **Single Sign-On across all 14 VEuPathDB sites**.
      - Instruct the user:
-       "Once you have registered, reply in the chat message box below to let me know whether you'd like to log in with your API key or email/password, and I will complete the setup for you."
+       "Once you have registered, open your Service Access tab at `<profile_url>`, copy your API key, paste it into the chat message box below as your next reply, and I will complete the setup for you."
 
 To log out and remove the stored token: `uv run scripts/wdk.py logout`.
 Full details and technical background: references/auth.md
