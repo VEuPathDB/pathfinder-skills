@@ -248,6 +248,53 @@ def test_cli_login_token_from_stdin(tmp_path, monkeypatch, capsys):
     assert token_file.read_text().strip() == "stdin-token-val"
 
 
+def test_cli_login_token_from_file(tmp_path, monkeypatch, capsys):
+    import wdk
+
+    monkeypatch.delenv("VEUPATHDB_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "_client.verify_token",
+        lambda site_id, tok: {"id": 1234, "email": "alice@test.org", "isGuest": False},
+    )
+
+    key_file = tmp_path / "plasmodb-key"
+    key_file.write_text("file-secret-token\n")
+
+    p = wdk.build_parser()
+    args = p.parse_args(["login", "plasmodb", "--token-file", str(key_file)])
+    args.func(args)
+    out = capsys.readouterr().out
+    assert "Authenticated: alice@test.org" in out
+    token_file = tmp_path / "veupathdb" / "token"
+    assert token_file.is_file()
+    assert token_file.read_text().strip() == "file-secret-token"
+    assert (token_file.stat().st_mode & 0o777) == 0o600
+
+
+def test_cli_login_token_from_file_at_syntax(tmp_path, monkeypatch, capsys):
+    import wdk
+
+    monkeypatch.delenv("VEUPATHDB_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "_client.verify_token",
+        lambda site_id, tok: {"id": 1234, "email": "alice@test.org", "isGuest": False},
+    )
+
+    key_file = tmp_path / "plasmodb-key"
+    key_file.write_text("at-file-secret-token\n")
+
+    p = wdk.build_parser()
+    args = p.parse_args(["login", "plasmodb", "--token", f"@{key_file}"])
+    args.func(args)
+    out = capsys.readouterr().out
+    assert "Authenticated: alice@test.org" in out
+    token_file = tmp_path / "veupathdb" / "token"
+    assert token_file.is_file()
+    assert token_file.read_text().strip() == "at-file-secret-token"
+
+
 
 
 def test_live_whoami(live_client):

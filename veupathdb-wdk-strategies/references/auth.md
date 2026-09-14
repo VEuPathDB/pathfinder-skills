@@ -12,24 +12,34 @@ works on all of them.
 When an assistant runs this skill on behalf of a user:
 - Chat/desktop users should **never** be instructed to run bash commands or open terminals.
 - If `whoami` fails or reports GUEST, the assistant must **never** inspect `~/.config` or `env` (which triggers security approval popups), and must never attempt data queries.
-- Instead, the assistant presents an interactive questionnaire (via `ask_question` in Antigravity, `AskUserQuestion` in Claude Code, or markdown chat choices) offering Option 1 or Option 2.
+- Instead, the assistant presents an interactive questionnaire (via `ask_question` in Antigravity, `AskUserQuestion` in Claude Code, or markdown chat choices) offering Option 1 (file path), Option 2 (direct paste), or Option 3 (registration).
 - When the user provides their choice and input, the **assistant** runs the appropriate CLI login command and verifies with `whoami`.
 
 > [!IMPORTANT] **Why password authentication is not supported**
 > Account passwords must **never** be collected in chat conversations or command-line parameters. In assistant environments (Antigravity, Claude Code, etc.), session transcripts are persisted to disk (e.g. `~/.gemini`, `~/.claude`) and may be group- or world-readable, and process arguments are visible in system process tables. Personal API keys obtained from the browser can be revoked and regenerated at any time from the account profile without endangering master account passwords.
 
-### Option 1: Browser API key
+### Option 1: File path (Recommended — keeps token out of chat transcripts)
+Best practice for chat/assistant environments:
 1. Direct the user to open their community profile: `<profile_url>` (e.g. `https://plasmodb.org/plasmo/app/user/profile#serviceAccess`).
-2. The user copies their personal API key from the **Service Access** tab.
-3. The user pastes the key into the chat message box below as their next reply, and the agent executes:
+2. The user copies their personal API key from the **Service Access** tab and saves it to a local file (e.g. `/tmp/<site>-key` such as `/tmp/plasmodb-key` or `/tmp/vectorbase-key`).
+3. The user replies with the file path in chat, and the agent executes:
 
-       uv run scripts/wdk.py login [site] --token <PASTED_KEY>
-       # Or via stdin: printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login [site] --token -
+       uv run scripts/wdk.py login [site] --token-file /tmp/<site>-key
 
-### Option 2: Unregistered users
+   The CLI validates the token, writes it to `~/.config/veupathdb/token` (mode 0600), and the temporary file can then be deleted.
+
+### Option 2: Direct paste into chat
+For users who prefer not to create a local file:
+1. Direct the user to open their community profile: `<profile_url>`.
+2. The user copies their API key from the **Service Access** tab and pastes it into the chat message box.
+3. The agent executes via stdin to prevent exposing the token in `ps` process tables:
+
+       printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login [site] --token -
+
+### Option 3: Unregistered users
 If the user does not have an account, direct them to register for free:
 `https://veupathdb.org/veupathdb/app/user/registration` (or the component site's
-registration page). After registration, they open their profile's Service Access tab, copy their API key, and provide it via Option 1.
+registration page). After registration, they open their profile's Service Access tab, copy their API key, and provide it via Option 1 or Option 2.
 
 ### Community / Site Detection
 To identify which community website a user's prompt pertains to:

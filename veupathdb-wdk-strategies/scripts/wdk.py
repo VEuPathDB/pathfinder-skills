@@ -10,6 +10,7 @@ Run `wdk.py --help` for subcommands, `wdk.py <sub> --help` for details.
 import argparse
 import getpass
 import json
+import pathlib
 import sys
 
 from _sites import (
@@ -59,8 +60,11 @@ def cmd_whoami(args) -> None:
         fail(
             f"not logged in. VEuPathDB authentication is required.\n\n"
             f"To log in with your browser API key:\n"
-            f"  1. Go to: {prof}\n"
-            f"  2. Run:   uv run scripts/wdk.py login {args.site} --token <PASTED_KEY>\n\n"
+            f"  1. Log in at: {prof}\n"
+            f"  2. Copy your API key from the 'Service Access' tab\n"
+            f"  3. Save to a file: echo '<KEY>' > /tmp/{args.site}-key\n"
+            f"     Run:           uv run scripts/wdk.py login {args.site} --token-file /tmp/{args.site}-key\n"
+            f"     (Or directly:  uv run scripts/wdk.py login {args.site} --token <KEY>)\n\n"
             f"Need an account? Register at: {reg}"
         )
     c = client(args.site)
@@ -80,9 +84,10 @@ def cmd_login(args) -> None:
         verify_token,
     )
 
+    token_file_arg = getattr(args, "token_file", None)
     site_id = (args.site or "").strip().lower()
     if not site_id:
-        if args.token:
+        if args.token or token_file_arg:
             site_id = "veupathdb"
         elif sys.stdin.isatty():
             try:
@@ -99,11 +104,28 @@ def cmd_login(args) -> None:
             f"unknown site '{site_id}'; valid: {', '.join(sorted(SITES))}"
         )
 
-    # 1. Direct token provided via flag
-    if args.token:
-        tok = args.token.strip()
-        if tok == "-":
+    # 1. Direct token provided via flag or file
+    tok = None
+    if token_file_arg:
+        p = pathlib.Path(token_file_arg).expanduser()
+        if not p.is_file():
+            fail(f"token file not found: {p}")
+        tok = p.read_text(encoding="utf-8").strip()
+    elif args.token:
+        raw = args.token.strip()
+        if raw.startswith("@"):
+            p = pathlib.Path(raw[1:]).expanduser()
+            if not p.is_file():
+                fail(f"token file not found: {p}")
+            tok = p.read_text(encoding="utf-8").strip()
+        elif raw == "-":
             tok = sys.stdin.read().strip()
+        elif pathlib.Path(raw).expanduser().is_file():
+            tok = pathlib.Path(raw).expanduser().read_text(encoding="utf-8").strip()
+        else:
+            tok = raw
+
+    if tok:
         print(f"Verifying token against {site_id}...", file=sys.stderr)
         try:
             user = verify_token(site_id, tok)
@@ -118,7 +140,7 @@ def cmd_login(args) -> None:
 
     # 2. Interactive wizard
     if not sys.stdin.isatty():
-        fail("interactive login requires a TTY. Use --token <KEY> (or --token -).")
+        fail("interactive login requires a TTY. Use --token-file <PATH> or --token <KEY> (or --token -).")
 
     proj = project_id(site_id)
     prof = profile_url(site_id)
@@ -129,7 +151,8 @@ def cmd_login(args) -> None:
     print("─" * 60)
     print("Choose how you would like to authenticate:")
     print("  [1] Paste API key from browser (User menu -> My Account -> Service Access)")
-    print("  [2] Register a new account (opens registration link)")
+    print(f"  [2] Read API key from file (e.g. /tmp/{site_id}-key)")
+    print("  [3] Register a new account (opens registration link)")
     print("  [q] Quit")
     print()
 
@@ -143,8 +166,33 @@ def cmd_login(args) -> None:
         sys.exit(0)
     elif choice == "2":
         print()
+        try:
+            path_str = input(f"Path to token file [e.g. /tmp/{site_id}-key]: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            sys.exit(1)
+        if not path_str:
+            fail("no token file provided")
+        p = pathlib.Path(path_str).expanduser()
+        if not p.is_file():
+            fail(f"token file not found: {p}")
+        tok = p.read_text(encoding="utf-8").strip()
+        if not tok:
+            fail("token file is empty")
+        print(f"Verifying token against {site_id}...", file=sys.stderr)
+        try:
+            user = verify_token(site_id, tok)
+        except Exception as e:
+            fail(f"invalid API key: {e}")
+        saved = save_token(tok)
+        email = user.get("email") or "unknown"
+        uid = user.get("id") or "unknown"
+        print(f"✓ Authenticated: {email} (id={uid}) on {site_id}")
+        print(f"✓ Saved token to {saved} (mode 0600)")
+    elif choice == "3":
+        print()
         print(f"Register for free at: {reg}")
-        print("After registering, log in to your profile, copy your API key, and run 'wdk.py login --token <KEY>'.")
+        print("After registering, log in to your profile, copy your API key, and run 'wdk.py login --token <KEY>' or '--token-file <PATH>'.")
         sys.exit(0)
     else:  # default option 1
         print()
@@ -649,6 +697,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("login", help="authenticate and store token in ~/.config/veupathdb/token")
     sp.add_argument("site", nargs="?", default=None, help="target site (default: prompt or veupathdb)")
     sp.add_argument("--token", help="paste API key directly without interactive prompt (or '-' for stdin)")
+    sp.add_argument("--token-file", help="read API key from file (e.g. /tmp/<site>-key; keeps secrets out of logs)")
     sp.set_defaults(func=cmd_login)
 
     sp = sub.add_parser("logout", help="remove stored token from ~/.config/veupathdb/token")

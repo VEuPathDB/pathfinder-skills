@@ -46,13 +46,28 @@ Verify authentication first:
    - **In Antigravity**: Use the `ask_question` tool:
      - Question: `"VEuPathDB authentication is required to access <Project>. How would you like to proceed?"`
      - Options:
-       - `"(Recommended) I have an account — I'll get my browser API key and paste it"`
+       - `"(Recommended) I have an account — I'll save my browser API key to a file (e.g. /tmp/<site>-key)"`
+       - `"I have an account — I'll paste my browser API key directly into chat"`
        - `"I don't have an account yet — I need to register"`
-   - **In Claude Code or other harnesses**: Use the harness questionnaire tool (e.g. `AskUserQuestion`) if available, or present the 2 options directly in your chat response and wait for the user's reply.
+   - **In Claude Code or other harnesses**: Use the harness questionnaire tool (e.g. `AskUserQuestion`) if available, or present the 3 options directly in your chat response and wait for the user's reply.
 
 3. **Execute based on the user's response**:
 
-   - **Option A: User has an account (Browser API Key)**:
+   - **Option A: User selects File path (Recommended — keeps key out of chat logs)**:
+     - Provide the direct markdown link to their community Service Access page:
+       `[<Project> Service Access Tab](<profile_url>)`
+       *(User menu in top-right → **My Account** → **Service Access** tab)*.
+     - Instruct the user clearly:
+       "Please log in at the link above, copy your API key from the Service Access tab, save it into a local file (for example `/tmp/<site>-key`), and reply with the file path in the chat message box below as your next reply."
+     - When the user sends the path (e.g. `/tmp/<site>-key`), **YOU execute**:
+       ```bash
+       uv run scripts/wdk.py login <site> --token-file "<PATH>"
+       ```
+     - Verify with `uv run scripts/wdk.py whoami <site>`.
+     - Confirm success and **immediately proceed with the user's original request**.
+       *(Note: You can inform the user that they may safely delete the temporary file now that the token is securely stored in `~/.config/veupathdb/token` with 0600 permissions).*
+
+   - **Option B: User selects Direct paste into chat**:
      - Provide the direct markdown link to their community Service Access page:
        `[<Project> Service Access Tab](<profile_url>)`
        *(User menu in top-right → **My Account** → **Service Access** tab)*.
@@ -60,18 +75,17 @@ Verify authentication first:
        "Please log in to your account at the page linked above, copy your API key from the Service Access tab, paste it into the chat message box below as your next reply, and send it."
      - When the user sends their key in their next message, **YOU execute**:
        ```bash
-       uv run scripts/wdk.py login <site> --token "<PASTED_KEY>"
+       printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login <site> --token -
        ```
-       *(Note: `--token -` via stdin is also supported: `printf '%s' "<PASTED_KEY>" | uv run scripts/wdk.py login <site> --token -`)*.
      - Verify with `uv run scripts/wdk.py whoami <site>`.
      - Confirm success and **immediately proceed with the user's original request**.
 
-   - **Option B: User needs to register**:
+   - **Option C: User needs to register**:
      - Provide the direct markdown link to the community registration page:
        `[Register at <Project>](<registration_url>)`
      - Explain that registration is **free**, takes **under 1 minute**, requires no waiting period, and provides **Single Sign-On across all 14 VEuPathDB sites**.
      - Instruct the user:
-       "Once you have registered, open your Service Access tab at `<profile_url>`, copy your API key, paste it into the chat message box below as your next reply, and I will complete the setup for you."
+       "Once you have registered, open your Service Access tab at `<profile_url>`, copy your API key, and reply in the chat message box below with either the file path where you saved it (e.g. `/tmp/<site>-key`) or the pasted key, and I will complete the setup for you."
 
 To log out and remove the stored token: `uv run scripts/wdk.py logout`.
 Full details and technical background: references/auth.md
