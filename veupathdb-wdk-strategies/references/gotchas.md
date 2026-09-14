@@ -62,3 +62,21 @@ there (docs/knowledge/wdk/rules). The CLI guards the starred ones.
     or `env` triggers security approval dialogs in desktop environments (Antigravity Desktop) and
     derails the user. Never probe config files or env vars; transition immediately to the onboarding
     questionnaire and run the login command for the user.
+19. ★ `fetch-record` and `--tables Sequences` vs `GeneTranscripts`:
+    Gene records in VEuPathDB contain `transcript_count`, `exon_count`, `product`, and `location_text`
+    directly in their default attributes (`fetch-record <site> <gene_id>`). If structured transcript
+    metadata is needed, use `--tables GeneTranscripts`. **Never use `--tables Sequences`** unless raw
+    FASTA/DNA sequences are explicitly requested by the user: `Sequences` dumps multi-kilobase
+    nucleotide sequences that trigger tool output truncation and context clutter.
+20. ★ Never write ad-hoc Python subprocess wrapper scripts to reformat CLI output:
+    In desktop agent environments (such as Antigravity Desktop), running arbitrary inline Python
+    commands (`python -c "import subprocess..."` or scripts in `scratch/`) triggers interactive
+    security approval dialogs. Always consume the structured JSON output directly from the CLI or
+    use built-in CLI flags (`--attributes`, `--tables`, `--filter`, `--limit`).
+21. ★ ID-list searches (`GeneByLocusTag`) and `input-dataset` parameters:
+    WDK searches taking user-provided ID sets (such as `GeneByLocusTag`) use parameter type `input-dataset`.
+    In raw WDK REST calls, these expect an uploaded numeric Dataset ID, not gene symbols. `wdk.py`
+    automatically handles this: when you pass gene IDs (e.g. `--params '{"ds_gene_ids": "AGAP001234"}'`
+    or comma-separated lists), `encode_params` automatically creates the dataset on the fly and
+    substitutes the numeric ID. However, for a single gene lookup, `fetch-record <site> <gene_id>`
+    is much simpler and faster.

@@ -199,6 +199,21 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
   Do NOT write custom scripts in `scratch/` to dump all raw samples across dozens of
   datasets. The `ai_expression` attribute is an external web UI flag and is strictly
   **out of scope** (do not query, scrape, or automate it).
+- **`fetch-record` attributes and `--tables Sequences` vs `GeneTranscripts`**:
+  `fetch-record <site> <gene_id>` returns `transcript_count`, `exon_count`, `product`,
+  and `location_text` directly in its default attributes without truncation.
+  To list transcripts, use `--tables GeneTranscripts`. **Never use `--tables Sequences`**
+  unless raw FASTA/DNA sequences are explicitly requested by the user: `Sequences` dumps
+  multi-kilobase nucleotide sequences that trigger tool output truncation.
+- **Never write ad-hoc Python subprocess wrapper scripts to parse CLI output**:
+  In desktop agent environments (e.g. Antigravity Desktop), invoking inline Python commands
+  (`python -c "import subprocess..."` or scripts in `scratch/`) triggers interactive
+  security approval modals and interrupts the user. Always consume structured JSON output
+  directly from `wdk.py` or use built-in CLI flags (`--attributes`, `--tables`, `--filter`).
+- **ID-list searches (`GeneByLocusTag`) and `input-dataset` parameters**:
+  Searches accepting gene ID lists (e.g. `GeneByLocusTag`) use parameter type `input-dataset`.
+  The CLI automatically creates and uploads the dataset to WDK and substitutes the resulting
+  numeric dataset ID. For a single gene lookup, `fetch-record <site> <gene_id>` is direct and preferred.
 
 ## Deeper reference (read on demand)
 
@@ -208,6 +223,7 @@ When asked about a gene by symbol, name, or product (e.g. `SRPN2`, `K13`):
 - references/gotchas.md — every known silent-failure mode
 
 Out of scope (v1): semantic search, site-search, control tests, enrichment,
-step analyses, filters, phyletic profile patterns, dataset/basket uploads, EDA,
+step analyses, filters, phyletic profile patterns, manual basket uploads, EDA,
 web UI `ai_expression` summaries.
 Tests + gold standards: TESTS.md.
+

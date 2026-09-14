@@ -20,8 +20,11 @@ params — WDK rejects thousands separators; send `"10000"` not `"10,000"`.
   `"[\"a\",\"b\"]"`. A single-pick given a 2-element array is a 500.
 - `input-step` params are ALWAYS submitted as "" — the actual input step is
   wired via the strategy's stepTree, never via parameters.
-- `input-dataset` params need an uploaded dataset (out of scope v1); searches
-  requiring one will fail with WDK's own message.
+- `input-dataset` params expect an uploaded numeric Dataset ID on the wire. When
+  passed a list of IDs or a delimited string (e.g. `"AGAP001234, AGAP001235"`),
+  `encode_params` automatically uploads them via `POST /users/current/datasets`
+  and substitutes the assigned dataset ID. Passing a numeric string directly
+  is also supported.
 
 ## Vocabularies
 

@@ -188,6 +188,21 @@ class Client:
             self._user_id = int(me["id"])
         return self._user_id
 
+    def create_id_dataset(self, ids: list[str]) -> int:
+        """Upload a list of IDs as a temporary user dataset.
+
+        Returns the integer dataset ID assigned by WDK.
+        """
+        clean_ids = [str(i).strip() for i in ids if str(i).strip()]
+        if not clean_ids:
+            raise ValueError("Cannot create ID dataset from empty list of IDs")
+        payload = {
+            "sourceType": "idList",
+            "sourceContent": {"ids": clean_ids},
+        }
+        res = self.post("/users/current/datasets", body=payload)
+        return int(res["id"])
+
 
 DEFAULT_EXCLUDED_PARAM_PREFIXES = ("eda_",)
 

@@ -48,8 +48,11 @@ Run all: `uv run --with pytest --with httpx python -m pytest tests -q`
 | AUTH-6 | `wdk.py login plasmodb --token-file <PATH>` / test_client.py::test_cli_login_token_from_file | reads token from file, verifies and stores in config (mode 0600) | exact (offline) | mode 0600 | 2026-09-14 |
 | SITE-1 | `wdk.py detect-site "<query>"` / test_client.py::test_cli_detect_site & test_sites.py::test_detect_site_from_queries | maps organism/pathogen/vector keywords to community site (toxodb, vectorbase, etc.) with veupathdb fallback | exact | community site id + URLs | 2026-09-11 |
 | ENC-1 | `encode_params(_mw(), {})` & `encode_params(_mw(), {"organism": []})` / test_encode.py::test_missing_required_multipick_raises_param_error | catches unselected/empty required multi-pick parameters locally; instructs param-options | exact (offline) | ParamError naming parameter and options | 2026-09-11 |
+| ENC-2 | `encode_params(_dataset_search(), {"ds_gene_ids": "AGAP001234"})` / test_encode.py | handles `input-dataset` parameters; auto-uploads ID sets via client into WDK datasets; suggests `fetch-record` if client missing | exact | dataset ID substituted / clear error | 2026-09-14 |
+| DATASET-1 | `Client.create_id_dataset(["AGAP001234"])` / test_client.py::test_create_id_dataset_unit & test_live_create_id_dataset | uploads ID lists to `POST /users/current/datasets` and returns integer dataset ID | exact | integer dataset ID > 0 | 2026-09-14 |
 | EXPR-1 | `wdk.py expression vectorbase AGAP009221 --dataset DS_46d69d95d1` / test_expression.py | joins ExpressionGraphs and ExpressionGraphsDataTable; ranks samples descending by percentile; supports summary and keyword filters | fields-present | total_datasets=40, top_sample="carcass: male (val: 9.23, pct: 97.1%)" | 2026-09-11 |
 | PROMPT-3 | "Where is Anopheles gambiae SRPN5 (AGAP009221) expressed across body parts and tissues?" | VectorBase, `wdk.py expression vectorbase AGAP009221 --filter body` or `--dataset DS_46d69d95d1` | exact | site=VectorBase, top_tissues=[carcass male (97.1%), head male (97.0%), whole body male (96.0%), maxillary palps female (97.8%)] | 2026-09-11 |
+
 
 
 

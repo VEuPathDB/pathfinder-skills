@@ -309,3 +309,41 @@ def test_live_whoami_all_test_sites(site, token):
 
     me = Client(site, token=token).get("/users/current")
     assert me["isGuest"] is False
+
+
+def test_create_id_dataset_unit(monkeypatch):
+    from _client import Client
+
+    c = Client("vectorbase", token="dummy-token")
+    captured = {}
+
+    def mock_post(path, body):
+        captured["path"] = path
+        captured["body"] = body
+        return {"id": 12345678}
+
+    monkeypatch.setattr(c, "post", mock_post)
+
+    ds_id = c.create_id_dataset([" AGAP001234 ", "AGAP001235"])
+    assert ds_id == 12345678
+    assert captured["path"] == "/users/current/datasets"
+    assert captured["body"] == {
+        "sourceType": "idList",
+        "sourceContent": {"ids": ["AGAP001234", "AGAP001235"]},
+    }
+
+    with pytest.raises(ValueError):
+        c.create_id_dataset([])
+
+
+def test_live_create_id_dataset(live_client):
+    ds_id = live_client.create_id_dataset(["AGAP001234"])
+    assert isinstance(ds_id, int)
+    assert ds_id > 0
+
+
+
+
+
+
+

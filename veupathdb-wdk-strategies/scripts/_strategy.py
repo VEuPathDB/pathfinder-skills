@@ -81,7 +81,7 @@ def build_strategy(client, catalog, spec, name):
         if kind == "leaf":
             params = body.get("params", {})
             detail = get_search_detail_for_params(client, rt, body["search"], params)
-            wire = encode_params(detail, params)
+            wire = encode_params(detail, params, client=client)
             step = client.post(
                 f"/users/{uid}/steps",
                 {"searchName": body["search"], "searchConfig": {"parameters": wire}},
@@ -92,7 +92,7 @@ def build_strategy(client, catalog, spec, name):
             child = create(body["input"])
             params = body.get("params", {})
             detail = get_search_detail_for_params(client, rt, body["search"], params)
-            wire = encode_params(detail, params)  # input-step -> ""
+            wire = encode_params(detail, params, client=client)  # input-step -> ""
             step = client.post(
                 f"/users/{uid}/steps",
                 {"searchName": body["search"], "searchConfig": {"parameters": wire}},

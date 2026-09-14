@@ -94,3 +94,54 @@ def test_empty_required_multipick_raises_param_error():
     assert "parameter 'organism' cannot be empty" in msg
     assert "requires at least 1 selection" in msg
     assert "param-options" in msg
+
+
+def _dataset_search():
+    return {
+        "urlSegment": "GeneByLocusTag",
+        "parameters": [
+            {
+                "name": "ds_gene_ids",
+                "type": "input-dataset",
+                "allowEmptyValue": False,
+                "isVisible": True,
+            }
+        ],
+    }
+
+
+def test_input_dataset_numeric_passes_through():
+    from _shaping import encode_params
+
+    wire = encode_params(_dataset_search(), {"ds_gene_ids": "123456"})
+    assert wire["ds_gene_ids"] == "123456"
+
+    wire_int = encode_params(_dataset_search(), {"ds_gene_ids": 123456})
+    assert wire_int["ds_gene_ids"] == "123456"
+
+
+def test_input_dataset_with_client_auto_uploads():
+    from unittest.mock import MagicMock
+    from _shaping import encode_params
+
+    mock_client = MagicMock()
+    mock_client.create_id_dataset.return_value = 777888
+
+    wire = encode_params(
+        _dataset_search(),
+        {"ds_gene_ids": "AGAP001234, AGAP001235"},
+        client=mock_client,
+    )
+    assert wire["ds_gene_ids"] == "777888"
+    mock_client.create_id_dataset.assert_called_once_with(["AGAP001234", "AGAP001235"])
+
+
+def test_input_dataset_without_client_raises_helpful_error():
+    from _shaping import ParamError, encode_params
+
+    with pytest.raises(ParamError) as exc_info:
+        encode_params(_dataset_search(), {"ds_gene_ids": "AGAP001234"})
+    msg = str(exc_info.value)
+    assert "Parameter 'ds_gene_ids' expects a numeric Dataset ID" in msg
+    assert "fetch-record" in msg
+

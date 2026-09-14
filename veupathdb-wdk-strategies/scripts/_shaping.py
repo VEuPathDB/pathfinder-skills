@@ -350,7 +350,7 @@ COUNT_FIELDS = (
 )
 
 
-def encode_params(search_data, user_params):
+def encode_params(search_data, user_params, client=None):
     params = search_data.get("parameters", [])
     by_name = {p["name"]: p for p in params}
     unknown = sorted(set(user_params) - set(by_name))
@@ -376,6 +376,36 @@ def encode_params(search_data, user_params):
                 missing.append(name)
             wire[name] = ""
             continue
+        if ptype == "input-dataset":
+            val_str = str(value).strip()
+            if val_str.isdigit():
+                wire[name] = val_str
+                continue
+            if isinstance(value, list):
+                raw_ids = [str(x).strip() for x in value]
+            elif isinstance(value, str):
+                raw_ids = [x.strip() for x in re.split(r"[,;\s]+", value) if x.strip()]
+            else:
+                raw_ids = [str(value).strip()]
+            clean_ids = [x for x in raw_ids if x]
+            if not clean_ids:
+                wire[name] = ""
+                continue
+            if client is not None and hasattr(client, "create_id_dataset"):
+                try:
+                    dataset_id = client.create_id_dataset(clean_ids)
+                    wire[name] = str(dataset_id)
+                    continue
+                except Exception as e:
+                    raise ParamError(
+                        f"Failed to auto-upload ID dataset for '{name}' ({clean_ids[:3]}...): {e}"
+                    ) from e
+            else:
+                raise ParamError(
+                    f"Parameter '{name}' expects a numeric Dataset ID (from an uploaded dataset). "
+                    f"You passed {clean_ids[:3]!r}. To search by IDs, ensure an authenticated client "
+                    f"is available, or for single genes use: 'uv run scripts/wdk.py fetch-record <site> <id>'."
+                )
         vocab = p.get("vocabulary")
         if ptype == "multi-pick-vocabulary":
             items = [str(i) for i in _as_list(value)]

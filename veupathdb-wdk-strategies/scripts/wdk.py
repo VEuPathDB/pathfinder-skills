@@ -417,10 +417,11 @@ def _prepared(args):
     params = _load_params(args.params)
     detail = get_search_detail_for_params(c, rt, args.search, params)
     try:
-        wire = encode_params(detail, params)
+        wire = encode_params(detail, params, client=c)
     except ParamError as e:
         fail(str(e))
     return c, rt, wire, detail
+
 
 
 def cmd_count(args) -> None:
